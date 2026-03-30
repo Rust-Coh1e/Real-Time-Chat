@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebSocket Chat Test</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'JetBrains Mono', monospace;
+    background: #0a0a0f;
+    color: #e0e0e0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px;
+    gap: 20px;
+  }
+
+  h1 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    color: #555;
+    font-weight: 400;
+  }
+
+  .container {
+    display: flex;
+    gap: 20px;
+    width: 100%;
+    max-width: 900px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .panel {
+    flex: 1;
+    border: 1px solid #1a1a2e;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #0d0d14;
+  }
+
+  .panel-header {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #1a1a2e;
+  }
+
+  .panel-header span {
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #333;
+    transition: background 0.3s;
+  }
+  .dot.online { background: #00ff88; box-shadow: 0 0 6px #00ff8866; }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+    min-height: 0;
+  }
+
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
+
+  .msg { line-height: 1.5; }
+  .msg.system { color: #444; font-style: italic; }
+  .msg.sent { color: #6ec1e4; }
+  .msg.recv { color: #e0e0e0; }
+
+  .input-row {
+    display: flex;
+    border-top: 1px solid #1a1a2e;
+  }
+
+  input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 14px 16px;
+    color: #e0e0e0;
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+  }
+
+  input::placeholder { color: #333; }
+
+  button {
+    background: transparent;
+    border: none;
+    border-left: 1px solid #1a1a2e;
+    color: #444;
+    padding: 14px 20px;
+    font-family: inherit;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.2s, background 0.2s;
+  }
+
+  button:hover { color: #00ff88; background: #0a1a10; }
+</style>
+</head>
+<body>
+
+<h1>WebSocket Chat — Dual Test</h1>
+
+<div class="container">
+  <div class="panel" id="panel1">
+    <div class="panel-header">
+      <span>User 1</span>
+      <div class="dot" id="dot1"></div>
+    </div>
+    <div class="messages" id="msg1"></div>
+    <div class="input-row">
+      <input id="in1" placeholder="type a message..." />
+      <button onclick="send(1)">Send</button>
+    </div>
+  </div>
+
+  <div class="panel" id="panel2">
+    <div class="panel-header">
+      <span>User 2</span>
+      <div class="dot" id="dot2"></div>
+    </div>
+    <div class="messages" id="msg2"></div>
+    <div class="input-row">
+      <input id="in2" placeholder="type a message..." />
+      <button onclick="send(2)">Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const ws = {};
+  const URL = 'ws://localhost:8080/ws';
+
+  function addMsg(panel, text, cls) {
+    const el = document.getElementById('msg' + panel);
+    const div = document.createElement('div');
+    div.className = 'msg ' + cls;
+    div.textContent = text;
+    el.appendChild(div);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function connect(id) {
+    const sock = new WebSocket(URL);
+    ws[id] = sock;
+
+    sock.onopen = () => {
+      document.getElementById('dot' + id).classList.add('online');
+      addMsg(id, 'connected', 'system');
+    };
+
+    sock.onmessage = (e) => {
+      addMsg(id, e.data, 'recv');
+    };
+
+    sock.onclose = () => {
+      document.getElementById('dot' + id).classList.remove('online');
+      addMsg(id, 'disconnected', 'system');
+    };
+
+    sock.onerror = () => {
+      addMsg(id, 'connection error', 'system');
+    };
+  }
+
+  function send(id) {
+    const input = document.getElementById('in' + id);
+    const msg = input.value.trim();
+    if (!msg || !ws[id] || ws[id].readyState !== WebSocket.OPEN) return;
+    ws[id].send(msg);
+    addMsg(id, '→ ' + msg, 'sent');
+    input.value = '';
+  }
+
+  document.getElementById('in1').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(1); });
+  document.getElementById('in2').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(2); });
+
+  connect(1);
+  connect(2);
+</script>
+
+</body>
+</html>
