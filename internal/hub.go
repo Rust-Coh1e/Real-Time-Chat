@@ -1,27 +1,12 @@
-package main
+package internal
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"sync"
-	"time"
 
 	"github.com/gorilla/websocket"
 )
-
-type Message struct {
-	Sender    string    `json:"sender"`
-	Text      string    `json:"text"`
-	CreatedAt time.Time `json:"createdat"`
-}
-
-type Client struct {
-	Name       string
-	Conn       *websocket.Conn
-	Chan       chan []byte
-	currentHub *Hub
-}
 
 type Hub struct {
 	Name       string
@@ -34,14 +19,6 @@ type Hub struct {
 type HubManager struct {
 	hubs map[string]*Hub
 	mu   sync.RWMutex
-}
-
-func NewMessage(send string, text string, created time.Time) *Message {
-	return &Message{
-		Sender:    send,
-		Text:      text,
-		CreatedAt: created,
-	}
 }
 
 func NewHubManager() *HubManager {
@@ -69,15 +46,6 @@ func (h *HubManager) GetOrMake(name string) *Hub {
 		res = h.hubs[name]
 	}
 	return res
-}
-
-func NewClient(cn *websocket.Conn, h *Hub, name string) *Client {
-	return &Client{
-		Name:       name,
-		Conn:       cn,
-		Chan:       make(chan []byte),
-		currentHub: h,
-	}
 }
 
 func NewHub(name string) *Hub {
@@ -112,45 +80,6 @@ func (h *Hub) Run() {
 	}
 }
 
-func (c *Client) ReadPump() {
-	// читает сообщения из WebSocket и отправляет их в Hub.Broadcast
-	for {
-		_, msg, err := c.Conn.ReadMessage()
-
-		if err != nil {
-			log.Println(err)
-			c.currentHub.Unregister <- c
-			return
-		}
-
-		currMsg := NewMessage(c.Name, string(msg), time.Now())
-		data, err := json.Marshal(currMsg)
-
-		if err != nil {
-			log.Println(err)
-			c.currentHub.Unregister <- c
-			return
-		}
-		// defer c.Conn.Close()
-		c.currentHub.Broadcast <- data
-
-	}
-
-}
-
-func (c *Client) WritePump() {
-	// WritePump — читает из client.Chan и пишет в WebSocket
-	for msg := range c.Chan {
-
-		err := c.Conn.WriteMessage(websocket.TextMessage, msg)
-		if err != nil {
-			log.Println(err)
-			c.currentHub.Unregister <- c
-			return
-		}
-	}
-}
-
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
@@ -181,17 +110,4 @@ func wsHandler(hubMan *HubManager) http.HandlerFunc {
 		currClient.ReadPump()
 
 	}
-}
-
-func main() {
-
-	mainHubManager := NewHubManager()
-
-	http.HandleFunc("/ws", wsHandler(mainHubManager))
-
-	// go mainHub.Run()
-
-	log.Println("Server started :8080")
-
-	log.Fatal(http.ListenAndServe(":8080", nil))
 }

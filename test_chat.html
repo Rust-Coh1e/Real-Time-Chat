@@ -70,6 +70,57 @@
   }
   .dot.online { background: #00ff88; box-shadow: 0 0 6px #00ff8866; }
 
+  .config-row {
+    padding: 10px 16px;
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid #1a1a2e;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .config-row label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #555;
+    min-width: 40px;
+  }
+
+  .config-row input {
+    flex: 1;
+    background: #0a0a0f;
+    border: 1px solid #1a1a2e;
+    padding: 6px 10px;
+    color: #e0e0e0;
+    font-family: inherit;
+    font-size: 11px;
+    border-radius: 4px;
+    outline: none;
+  }
+
+  .config-row input:focus { border-color: #333; }
+
+  .btn-connect {
+    background: transparent;
+    border: 1px solid #1a1a2e;
+    color: #555;
+    padding: 6px 12px;
+    font-family: inherit;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    width: 100%;
+  }
+
+  .btn-connect:hover { color: #00ff88; border-color: #00ff88; }
+  .btn-connect.connected { color: #ff4444; border-color: #ff4444; }
+  .btn-connect.connected:hover { color: #ff6666; border-color: #ff6666; }
+
   .messages {
     flex: 1;
     overflow-y: auto;
@@ -87,15 +138,16 @@
 
   .msg { line-height: 1.5; }
   .msg.system { color: #444; font-style: italic; }
-  .msg.sent { color: #6ec1e4; }
-  .msg.recv { color: #e0e0e0; }
+  .msg .sender { color: #e8a86e; font-weight: 600; }
+  .msg .text { color: #e0e0e0; }
+  .msg .time { color: #333; font-size: 10px; margin-left: 8px; }
 
   .input-row {
     display: flex;
     border-top: 1px solid #1a1a2e;
   }
 
-  input {
+  input.msg-input {
     flex: 1;
     background: transparent;
     border: none;
@@ -106,9 +158,9 @@
     outline: none;
   }
 
-  input::placeholder { color: #333; }
+  input.msg-input::placeholder { color: #333; }
 
-  button {
+  button.send-btn {
     background: transparent;
     border: none;
     border-left: 1px solid #1a1a2e;
@@ -122,67 +174,110 @@
     transition: color 0.2s, background 0.2s;
   }
 
-  button:hover { color: #00ff88; background: #0a1a10; }
+  button.send-btn:hover { color: #00ff88; background: #0a1a10; }
 </style>
 </head>
 <body>
 
-<h1>WebSocket Chat — Dual Test</h1>
+<h1>WebSocket Chat — Room Test</h1>
 
 <div class="container">
-  <div class="panel" id="panel1">
+  <div class="panel">
     <div class="panel-header">
       <span>User 1</span>
       <div class="dot" id="dot1"></div>
     </div>
+    <div class="config-row">
+      <label>Name</label>
+      <input id="name1" value="Alice" />
+      <label>Room</label>
+      <input id="room1" value="general" />
+      <button class="btn-connect" id="conn1" onclick="toggleConnect(1)">Connect</button>
+    </div>
     <div class="messages" id="msg1"></div>
     <div class="input-row">
-      <input id="in1" placeholder="type a message..." />
-      <button onclick="send(1)">Send</button>
+      <input class="msg-input" id="in1" placeholder="type a message..." />
+      <button class="send-btn" onclick="send(1)">Send</button>
     </div>
   </div>
 
-  <div class="panel" id="panel2">
+  <div class="panel">
     <div class="panel-header">
       <span>User 2</span>
       <div class="dot" id="dot2"></div>
     </div>
+    <div class="config-row">
+      <label>Name</label>
+      <input id="name2" value="Bob" />
+      <label>Room</label>
+      <input id="room2" value="general" />
+      <button class="btn-connect" id="conn2" onclick="toggleConnect(2)">Connect</button>
+    </div>
     <div class="messages" id="msg2"></div>
     <div class="input-row">
-      <input id="in2" placeholder="type a message..." />
-      <button onclick="send(2)">Send</button>
+      <input class="msg-input" id="in2" placeholder="type a message..." />
+      <button class="send-btn" onclick="send(2)">Send</button>
     </div>
   </div>
 </div>
 
 <script>
   const ws = {};
-  const URL = 'ws://localhost:8080/ws';
+  const BASE = 'ws://localhost:8080/ws';
 
-  function addMsg(panel, text, cls) {
+  function addMsg(panel, html, cls) {
     const el = document.getElementById('msg' + panel);
     const div = document.createElement('div');
     div.className = 'msg ' + cls;
-    div.textContent = text;
+    div.innerHTML = html;
     el.appendChild(div);
     el.scrollTop = el.scrollHeight;
   }
 
+  function formatTime(t) {
+    if (!t) return '';
+    const d = new Date(t);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function toggleConnect(id) {
+    if (ws[id] && ws[id].readyState === WebSocket.OPEN) {
+      ws[id].close();
+      return;
+    }
+    connect(id);
+  }
+
   function connect(id) {
-    const sock = new WebSocket(URL);
+    const name = document.getElementById('name' + id).value.trim() || 'anon';
+    const room = document.getElementById('room' + id).value.trim() || 'general';
+    const url = `${BASE}?name=${encodeURIComponent(name)}&room=${encodeURIComponent(room)}`;
+
+    const sock = new WebSocket(url);
     ws[id] = sock;
+    const btn = document.getElementById('conn' + id);
 
     sock.onopen = () => {
       document.getElementById('dot' + id).classList.add('online');
-      addMsg(id, 'connected', 'system');
+      btn.textContent = 'Disconnect';
+      btn.classList.add('connected');
+      addMsg(id, `connected to <b>${room}</b> as <b>${name}</b>`, 'system');
     };
 
     sock.onmessage = (e) => {
-      addMsg(id, e.data, 'recv');
+      try {
+        const data = JSON.parse(e.data);
+        const time = `<span class="time">${formatTime(data.createdat)}</span>`;
+        addMsg(id, `<span class="sender">${data.sender}:</span> <span class="text">${data.text}</span>${time}`, '');
+      } catch {
+        addMsg(id, e.data, '');
+      }
     };
 
     sock.onclose = () => {
       document.getElementById('dot' + id).classList.remove('online');
+      btn.textContent = 'Connect';
+      btn.classList.remove('connected');
       addMsg(id, 'disconnected', 'system');
     };
 
@@ -196,15 +291,11 @@
     const msg = input.value.trim();
     if (!msg || !ws[id] || ws[id].readyState !== WebSocket.OPEN) return;
     ws[id].send(msg);
-    addMsg(id, '→ ' + msg, 'sent');
     input.value = '';
   }
 
   document.getElementById('in1').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(1); });
   document.getElementById('in2').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(2); });
-
-  connect(1);
-  connect(2);
 </script>
 
 </body>
