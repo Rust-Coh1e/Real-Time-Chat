@@ -1,11 +1,7 @@
 package internal
 
 import (
-	"log"
-	"net/http"
 	"sync"
-
-	"github.com/gorilla/websocket"
 )
 
 type Hub struct {
@@ -77,37 +73,5 @@ func (h *Hub) Run() {
 				client.Chan <- msg
 			}
 		}
-	}
-}
-
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-}
-
-func wsHandler(hubMan *HubManager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		conn, err := upgrader.Upgrade(w, r, nil)
-
-		clientName := r.URL.Query().Get("name")
-		clientRoom := r.URL.Query().Get("room")
-
-		if err != nil {
-			log.Println(err)
-			return
-		}
-
-		defer conn.Close()
-
-		hub := hubMan.GetOrMake(clientRoom)
-
-		currClient := NewClient(conn, hub, clientName)
-
-		hub.Register <- currClient
-
-		go currClient.WritePump()
-		currClient.ReadPump()
-
 	}
 }
