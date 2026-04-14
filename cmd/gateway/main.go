@@ -12,16 +12,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// Теперь Gateway
-// Chat Service готов. Нужен Gateway — cmd/gateway/main.go. Он делает:
-
-// Подключается к Chat Service как gRPC клиент
-// Поднимает HTTP сервер с WebSocket
-// Когда приходит WebSocket клиент — открывает gRPC stream к Chat Service
-// Перекидывает сообщения между WebSocket и gRPC stream
-
-// Для gRPC клиента тебе понадобится: grpc.Dial("localhost:50051", ...) для соединения, потом proto.NewChatServiceClient(conn) для создания клиента, и client.Chat(ctx) для открытия stream.
-// Попробуй набросать cmd/gateway/main.go — структуру и main функцию. Пока без wsHandler, просто подключение к gRPC и запуск HTTP сервера.
 
 type Gateway struct {
 	chatClient proto.ChatServiceClient
