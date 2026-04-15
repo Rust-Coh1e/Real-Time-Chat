@@ -40,6 +40,16 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 	newHub := msg.Room
 
 	hub := s.hubs.GetOrMake(newHub)
+
+	hub.SubscribeOnce.Do(func() {
+		sub := s.rdb.Subscribe(ctx, newHub)
+		go func() {
+			for msg := range sub.Channel() {
+				hub.Broadcast <- []byte(msg.Payload)
+			}
+		}()
+	})
+
 	currClient := internal.NewClient(hub, msg.Sender)
 	hub.Register <- currClient
 
@@ -123,6 +133,7 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 		// currClient.CurrentHub.Broadcast <- data
 
 		// тут надо запушить сообщение в Sub
+		s.rdb.Publish(ctx, newHub, data)
 
 	}
 }
