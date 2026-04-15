@@ -119,7 +119,10 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 		s.rdb.SaveMessage(ctx, newHub, data)
 
 		// defer c.Conn.Close()
-		currClient.CurrentHub.Broadcast <- data
+
+		// currClient.CurrentHub.Broadcast <- data
+
+		// тут надо запушить сообщение в Sub
 
 	}
 }

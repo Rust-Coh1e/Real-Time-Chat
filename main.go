@@ -104,6 +104,7 @@ func (h *Hub) Run() {
 			h.Clients[client] = true
 		case client := <-h.Unregister:
 			delete(h.Clients, client)
+		// тут надо читать из broadcast
 		case msg := <-h.Broadcast:
 			for client := range h.Clients {
 				client.Chan <- msg
