@@ -139,6 +139,9 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 }
 
 func main() {
+	port := flag.String("port", "50051", "port")
+	flag.Parse()
+
 	// Создать HubManager
 	mHub := internal.NewHubManager()
 	// Создать ChatService
@@ -154,8 +157,8 @@ func main() {
 	log.Println("New stream opened")
 	proto.RegisterChatServiceServer(mGRPC, mChatService)
 
-	listener, err := net.Listen("tcp", ":50051")
-	log.Println("Chat Service listening on :50051")
+	listener, err := net.Listen("tcp", ":"+*port)
+	log.Println("Chat Service listening on :" + *port)
 	// Запустить server.Serve(listener)
 	if err != nil {
 		log.Println("Error listening port")

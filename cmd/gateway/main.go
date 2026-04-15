@@ -12,7 +12,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-
 type Gateway struct {
 	chatClient proto.ChatServiceClient
 }
@@ -95,9 +94,13 @@ func wsHandler(gateway *Gateway) http.HandlerFunc {
 }
 
 func main() {
+	port := flag.String("port", "8080", "port")
+	server_port := flag.String("chat", "50051", "chat")
+
+	flag.Parse()
 	// Подключиться к gRPC серверу — grpc.Dial("localhost:50051", ...)
 	log.Println("Start...")
-	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient("localhost:"+*server_port, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatal("Failed to connect:", err)
 	}
@@ -116,8 +119,8 @@ func main() {
 
 	// go mainHub.Run()
 
-	log.Println("Server started :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Println("Server started :" + *port)
+	log.Fatal(http.ListenAndServe(":"+*port, nil))
 	// Зарегистрировать wsHandler
 	// Запустить HTTP сервер на :8080
 }
