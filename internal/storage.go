@@ -92,7 +92,7 @@ func (rdb *RedisClient) Publish(ctx context.Context, room string, msg []byte) er
 	err := rdb.client.Publish(ctx, key, msg).Err()
 
 	if err != nil {
-		return err.Err()
+		return err
 	}
 
 	return nil
