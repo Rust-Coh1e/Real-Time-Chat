@@ -5,11 +5,12 @@ import (
 )
 
 type Hub struct {
-	Name       string
-	Clients    map[*Client]bool
-	Register   chan *Client
-	Unregister chan *Client
-	Broadcast  chan []byte
+	Name          string
+	Clients       map[*Client]bool
+	Register      chan *Client
+	Unregister    chan *Client
+	Broadcast     chan []byte
+	SubscribeOnce sync.Once
 }
 
 type HubManager struct {

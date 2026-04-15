@@ -89,7 +89,7 @@ func (rdb *RedisClient) GetMembers(ctx context.Context, room string) ([]string, 
 func (rdb *RedisClient) Publish(ctx context.Context, room string, msg []byte) error {
 	key := "room:" + room
 
-	err := rdb.client.Publish(ctx, key, msg)
+	err := rdb.client.Publish(ctx, key, msg).Err()
 
 	if err != nil {
 		return err.Err()
