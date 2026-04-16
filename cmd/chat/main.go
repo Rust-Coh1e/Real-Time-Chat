@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"real-time-chat/config"
 	"real-time-chat/internal"
 	"real-time-chat/proto"
 
@@ -148,10 +149,14 @@ func main() {
 	// Создать ChatService
 
 	// TODO env конфиг
+	cfg, err := config.Load()
+	// redisURL := "redis://localhost:6379/0"
+	if err != nil {
+		log.Println("Error: Dont find env file")
+		return
+	}
 
-	redisURL := "redis://localhost:6379/0"
-
-	mChatService := NewChatService(mHub, redisURL, 50)
+	mChatService := NewChatService(mHub, cfg.RedisPort, 50)
 
 	// Создать gRPC сервер — grpc.NewServer()
 	mGRPC := grpc.NewServer()
