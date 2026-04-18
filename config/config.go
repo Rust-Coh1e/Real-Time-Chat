@@ -14,6 +14,7 @@ type Config struct {
 	DBPassword string
 	DBName     string
 	RedisPort  string
+	Secret     string
 }
 
 func Load() (*Config, error) {
@@ -31,5 +32,6 @@ func Load() (*Config, error) {
 		DBPassword: os.Getenv("DB_PASSWORD"),
 		DBName:     os.Getenv("DB_NAME"),
 		RedisPort:  os.Getenv("REDIS_PORT"),
+		Secret:     os.Getenv("SECRET_KEY"),
 	}, nil
 }
