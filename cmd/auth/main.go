@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"real-time-chat/config"
 	"real-time-chat/internal"
+	"real-time-chat/middleware"
 	"syscall"
 	"time"
 
@@ -126,7 +127,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:    ":" + *port,
-		Handler: mux,
+		Handler: middleware.CorsMiddleware(mux),
 	}
 
 	// http.ListenAndServe(":8080", mux)

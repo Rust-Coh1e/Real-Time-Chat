@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WebSocket Chat — Pub/Sub Test</title>
+<title>WebSocket Chat — Auth Test</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap');
 
@@ -27,12 +27,6 @@
     letter-spacing: 4px;
     color: #555;
     font-weight: 400;
-  }
-
-  .subtitle {
-    font-size: 11px;
-    color: #333;
-    letter-spacing: 1px;
   }
 
   .container {
@@ -113,7 +107,7 @@
 
   .config-row input:focus { border-color: #333; }
 
-  .btn-connect {
+  .btn {
     background: transparent;
     border: 1px solid #1a1a2e;
     color: #555;
@@ -126,12 +120,22 @@
     border-radius: 4px;
     transition: all 0.2s;
     flex-shrink: 0;
-    width: 100%;
   }
 
-  .btn-connect:hover { color: #00ff88; border-color: #00ff88; }
-  .btn-connect.connected { color: #ff4444; border-color: #ff4444; }
-  .btn-connect.connected:hover { color: #ff6666; border-color: #ff6666; }
+  .btn:hover { color: #00ff88; border-color: #00ff88; }
+  .btn.full { width: 100%; }
+  .btn.connected { color: #ff4444; border-color: #ff4444; }
+  .btn.connected:hover { color: #ff6666; border-color: #ff6666; }
+  .btn.auth-btn { color: #6ec1e4; border-color: #6ec1e4; }
+  .btn.auth-btn:hover { color: #9ed4ee; border-color: #9ed4ee; }
+
+  .status-msg {
+    padding: 4px 16px;
+    font-size: 10px;
+    border-bottom: 1px solid #1a1a2e;
+  }
+  .status-msg.ok { color: #00ff88; }
+  .status-msg.err { color: #ff4444; }
 
   .messages {
     flex: 1;
@@ -191,25 +195,35 @@
 </head>
 <body>
 
-<h1>WebSocket Chat — Pub/Sub Test</h1>
-<div class="subtitle">Each panel connects to a different Gateway to test Redis Pub/Sub</div>
+<h1>WebSocket Chat — Auth + Pub/Sub</h1>
 
 <div class="container">
   <div class="panel">
     <div class="panel-header">
-      <span>User 1 — Gateway :8080</span>
+      <span>User 1</span>
       <div class="dot" id="dot1"></div>
     </div>
     <div class="config-row">
-      <label>Name</label>
-      <input id="name1" value="Alice" />
-      <label>Room</label>
-      <input id="room1" value="general" />
-      <label>Port</label>
-      <input id="port1" value="8080" class="port-input" />
+      <label>User</label>
+      <input id="user1" value="alice" />
+      <label>Pass</label>
+      <input id="pass1" value="secret123" type="password" />
     </div>
     <div class="config-row">
-      <button class="btn-connect" id="conn1" onclick="toggleConnect(1)">Connect</button>
+      <button class="btn auth-btn" onclick="register(1)">Register</button>
+      <button class="btn auth-btn" onclick="login(1)">Login</button>
+    </div>
+    <div id="status1" class="status-msg" style="display:none"></div>
+    <div class="config-row">
+      <label>Room</label>
+      <input id="room1" value="general" />
+      <label>GW</label>
+      <input id="port1" value="8080" class="port-input" />
+      <label>Auth</label>
+      <input id="auth1" value="8082" class="port-input" />
+    </div>
+    <div class="config-row">
+      <button class="btn full" id="conn1" onclick="toggleConnect(1)">Connect</button>
     </div>
     <div class="messages" id="msg1"></div>
     <div class="input-row">
@@ -220,19 +234,30 @@
 
   <div class="panel">
     <div class="panel-header">
-      <span>User 2 — Gateway :8081</span>
+      <span>User 2</span>
       <div class="dot" id="dot2"></div>
     </div>
     <div class="config-row">
-      <label>Name</label>
-      <input id="name2" value="Bob" />
-      <label>Room</label>
-      <input id="room2" value="general" />
-      <label>Port</label>
-      <input id="port2" value="8081" class="port-input" />
+      <label>User</label>
+      <input id="user2" value="bob" />
+      <label>Pass</label>
+      <input id="pass2" value="secret456" type="password" />
     </div>
     <div class="config-row">
-      <button class="btn-connect" id="conn2" onclick="toggleConnect(2)">Connect</button>
+      <button class="btn auth-btn" onclick="register(2)">Register</button>
+      <button class="btn auth-btn" onclick="login(2)">Login</button>
+    </div>
+    <div id="status2" class="status-msg" style="display:none"></div>
+    <div class="config-row">
+      <label>Room</label>
+      <input id="room2" value="general" />
+      <label>GW</label>
+      <input id="port2" value="8081" class="port-input" />
+      <label>Auth</label>
+      <input id="auth2" value="8082" class="port-input" />
+    </div>
+    <div class="config-row">
+      <button class="btn full" id="conn2" onclick="toggleConnect(2)">Connect</button>
     </div>
     <div class="messages" id="msg2"></div>
     <div class="input-row">
@@ -244,6 +269,51 @@
 
 <script>
   const ws = {};
+  const tokens = {};
+
+  function showStatus(id, text, ok) {
+    const el = document.getElementById('status' + id);
+    el.textContent = text;
+    el.className = 'status-msg ' + (ok ? 'ok' : 'err');
+    el.style.display = 'block';
+    setTimeout(() => el.style.display = 'none', 4000);
+  }
+
+  async function authRequest(id, endpoint) {
+    const user = document.getElementById('user' + id).value.trim();
+    const pass = document.getElementById('pass' + id).value.trim();
+    const authPort = document.getElementById('auth' + id).value.trim();
+
+    try {
+      const res = await fetch(`http://localhost:${authPort}/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user, password: pass })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showStatus(id, `${endpoint} failed: ${res.status}`, false);
+        return null;
+      }
+      return data;
+    } catch (e) {
+      showStatus(id, `${endpoint} error: ${e.message}`, false);
+      return null;
+    }
+  }
+
+  async function register(id) {
+    const data = await authRequest(id, 'register');
+    if (data) showStatus(id, `registered: ${data.id}`, true);
+  }
+
+  async function login(id) {
+    const data = await authRequest(id, 'login');
+    if (data && data.token) {
+      tokens[id] = data.token;
+      showStatus(id, 'logged in, token saved', true);
+    }
+  }
 
   function addMsg(panel, html, cls) {
     const el = document.getElementById('msg' + panel);
@@ -269,10 +339,15 @@
   }
 
   function connect(id) {
-    const name = document.getElementById('name' + id).value.trim() || 'anon';
+    const token = tokens[id];
+    if (!token) {
+      showStatus(id, 'login first to get a token', false);
+      return;
+    }
+
     const room = document.getElementById('room' + id).value.trim() || 'general';
     const port = document.getElementById('port' + id).value.trim() || '8080';
-    const url = `ws://localhost:${port}/ws?name=${encodeURIComponent(name)}&room=${encodeURIComponent(room)}`;
+    const url = `ws://localhost:${port}/ws?token=${encodeURIComponent(token)}&room=${encodeURIComponent(room)}`;
 
     const sock = new WebSocket(url);
     ws[id] = sock;
@@ -282,13 +357,13 @@
       document.getElementById('dot' + id).classList.add('online');
       btn.textContent = 'Disconnect';
       btn.classList.add('connected');
-      addMsg(id, `connected to <b>${room}</b> as <b>${name}</b> via port <b>${port}</b>`, 'system');
+      addMsg(id, `connected to <b>${room}</b> via port <b>${port}</b>`, 'system');
     };
 
     sock.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
-        const time = `<span class="time">${formatTime(data.createdat)}</span>`;
+        const time = `<span class="time">${formatTime(data.createdat || data.timestamp)}</span>`;
         addMsg(id, `<span class="sender">${data.sender}:</span> <span class="text">${data.text}</span>${time}`, '');
       } catch {
         addMsg(id, e.data, '');

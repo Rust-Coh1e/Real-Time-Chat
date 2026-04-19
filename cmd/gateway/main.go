@@ -6,6 +6,8 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"real-time-chat/config"
+	"real-time-chat/internal"
 	"real-time-chat/proto"
 
 	"github.com/gorilla/websocket"
@@ -23,8 +25,18 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func wsHandler(gateway *Gateway) http.HandlerFunc {
+func wsHandler(gateway *Gateway, cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+
+		clientToken := r.URL.Query().Get("token")
+		// clientRoom := r.URL.Query().Get("room")
+		clientClaims, err := internal.ParseToken(clientToken, cfg.Secret)
+
+		if err != nil {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
+		}
+
 		// Upgrade до WebSocket (как раньше)
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -32,8 +44,7 @@ func wsHandler(gateway *Gateway) http.HandlerFunc {
 			return
 		}
 		// Достать name и room из query параметров
-
-		clientName := r.URL.Query().Get("name")
+		clientName := clientClaims.Username
 		clientRoom := r.URL.Query().Get("room")
 
 		// Открыть gRPC stream: gateway.chatClient.Chat(context.Background())
@@ -98,6 +109,12 @@ func main() {
 	port := flag.String("port", "8080", "port")
 	server_port := flag.String("chat", "50051", "chat")
 
+	cfg, status := config.Load()
+
+	if status != nil {
+		log.Fatal("Failed to open env:", status)
+	}
+
 	flag.Parse()
 	// Подключиться к gRPC серверу — grpc.Dial("localhost:50051", ...)
 	log.Println("Start...")
@@ -116,7 +133,7 @@ func main() {
 
 	log.Println("Making client..")
 
-	http.HandleFunc("/ws", wsHandler(mainGateway))
+	http.HandleFunc("/ws", wsHandler(mainGateway, cfg))
 
 	// go mainHub.Run()
 
