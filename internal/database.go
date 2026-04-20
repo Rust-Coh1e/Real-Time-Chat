@@ -17,6 +17,7 @@ type Database struct {
 
 type MessageRow struct {
 	ID        uuid.UUID
+	SenderID  uuid.UUID `json:"sender_id"`
 	Sender    string
 	Text      string
 	CreatedAt time.Time

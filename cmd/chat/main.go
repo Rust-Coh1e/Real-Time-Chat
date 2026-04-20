@@ -9,23 +9,27 @@ import (
 	"real-time-chat/config"
 	"real-time-chat/internal"
 	"real-time-chat/proto"
+	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 )
 
 type ChatService struct {
 	hubs *internal.HubManager
 	rdb  *internal.RedisClient
+	ms   *internal.MessageStore
+	db   *internal.Database
 	proto.UnimplementedChatServiceServer
 }
 
-func NewChatService(hubs *internal.HubManager, url string, capacity int) *ChatService {
-
-	rdb := internal.NewRedisClient(url, capacity)
-
+func NewChatService(hubs *internal.HubManager, rdb *internal.RedisClient, db *internal.Database) *ChatService {
+	ms := internal.NewMessageStore(db, rdb)
 	return &ChatService{
 		hubs: hubs,
 		rdb:  rdb,
+		ms:   ms,
+		db:   db,
 	}
 }
 
@@ -55,36 +59,52 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 	currClient := internal.NewClient(hub, msg.Sender)
 	hub.Register <- currClient
 
+	defer func() {
+		// нужно удалить клиента из redis и тут
+		if err := s.rdb.RemoveMember(ctx, newHub, currClient.Name); err != nil {
+			log.Println("Redis RemoveMember failed:", err)
+		}
+		//
+		currClient.CurrentHub.Unregister <- currClient
+	}()
+
 	// Тут нужно добавить клиента в Redis
 
-	err = s.rdb.AddMember(ctx, newHub, currClient.Name)
+	if err := s.rdb.AddMember(ctx, newHub, currClient.Name); err != nil {
+		log.Println("Redis AddMember failed:", err)
+	}
 
-	if err != nil {
-		return err
+	// uuidRoomID, status := uuid.Parse(newHub)
+
+	// if status != nil {
+	// 	return status
+	// }
+
+	hubID, ok := s.db.GetOrCreateRoom(ctx, newHub)
+	if ok != nil {
+		return ok
 	}
 
 	// Нужно подтянуть историю
-	history, err := s.rdb.GetHistory(ctx, newHub)
+	history, err := s.ms.GetHistory(ctx, hubID, 50)
 
+	log.Println("History:", len(history), "err:", err)
 	if err != nil {
 		return err
 	}
 
-	var chatMsg proto.ChatMessage
 	for i := len(history) - 1; i >= 0; i-- {
-		// так мы получили history нужно его конвертнуть
-		history_freq := []byte(history[i])
-
-		// Преобразование и отправка в API
-		err = json.Unmarshal(history_freq, &chatMsg)
+		err := stream.Send(&proto.ChatMessage{
+			Sender:    history[i].Sender,
+			Text:      history[i].Text,
+			SenderId:  history[i].SenderID.String(),
+			Timestamp: history[i].CreatedAt.Unix(),
+		})
 		if err != nil {
 			return err
 		}
-
-		if err := stream.Send(&chatMsg); err != nil {
-			return err
-		}
 	}
+
 	// историю получили
 
 	go func() {
@@ -107,13 +127,6 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 	for {
 		msg, err := stream.Recv()
 
-		defer func() {
-			// нужно удалить клиента из redis и тут
-			s.rdb.RemoveMember(ctx, newHub, currClient.Name)
-			//
-			currClient.CurrentHub.Unregister <- currClient
-		}()
-
 		if err != nil {
 			log.Println(err)
 			return err
@@ -128,14 +141,34 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 		}
 
 		// Тут нужно запушить сообщение в redis
-		s.rdb.SaveMessage(ctx, newHub, data)
+		// s.rdb.SaveMessage(ctx, newHub, data)
+		msgID, err := uuid.Parse(msg.SenderId)
+
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+
+		// Теперь тут надо сделать Cache aside
+		msgRow := internal.MessageRow{
+			ID:        uuid.New(),
+			SenderID:  msgID, // из JWT или первого сообщения
+			Sender:    msg.Sender,
+			Text:      msg.Text,
+			CreatedAt: time.Now(),
+		}
+
+		s.ms.SaveMessage(ctx, hubID, msgRow)
 
 		// defer c.Conn.Close()
 
 		// currClient.CurrentHub.Broadcast <- data
 
 		// тут надо запушить сообщение в Sub
-		s.rdb.Publish(ctx, newHub, data)
+		err = s.rdb.Publish(ctx, newHub, data)
+		if err != nil {
+			hub.Broadcast <- data
+		}
 
 	}
 }
@@ -156,7 +189,16 @@ func main() {
 		return
 	}
 
-	mChatService := NewChatService(mHub, cfg.RedisPort, 50)
+	db, err := internal.NewDatabase(cfg)
+
+	if err != nil {
+		log.Println("Error: Cant connect to DB")
+		return
+	}
+
+	rdb := internal.NewRedisClient(cfg.RedisPort, 50)
+
+	mChatService := NewChatService(mHub, rdb, db)
 
 	// Создать gRPC сервер — grpc.NewServer()
 	mGRPC := grpc.NewServer()

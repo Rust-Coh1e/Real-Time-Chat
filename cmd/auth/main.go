@@ -41,7 +41,10 @@ func (authS *AuthService) RegisterHandler(w http.ResponseWriter, r *http.Request
 	var req RegisterReq
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Invalid JSON",
+		})
 		return
 	}
 
@@ -49,7 +52,10 @@ func (authS *AuthService) RegisterHandler(w http.ResponseWriter, r *http.Request
 
 	id, status := authS.db.CreateUser(ctx, req.Username, req.Password)
 	if status != nil {
-		http.Error(w, "Invalid username", http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "username already taken",
+		})
 		return
 	}
 

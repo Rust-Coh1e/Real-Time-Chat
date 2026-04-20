@@ -7,6 +7,7 @@ message ChatMessage {
     string text = 2;
     string room = 3;
     int64 timestamp = 4;
+    string sender_id = 5;
 }
 
 service ChatService {

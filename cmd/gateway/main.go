@@ -46,6 +46,7 @@ func wsHandler(gateway *Gateway, cfg *config.Config) http.HandlerFunc {
 		// Достать name и room из query параметров
 		clientName := clientClaims.Username
 		clientRoom := r.URL.Query().Get("room")
+		clientID := clientClaims.UserID
 
 		// Открыть gRPC stream: gateway.chatClient.Chat(context.Background())
 		stream, err := gateway.chatClient.Chat(context.Background())
@@ -60,8 +61,9 @@ func wsHandler(gateway *Gateway, cfg *config.Config) http.HandlerFunc {
 		log.Println("New client:", clientName, " Hub ", clientRoom)
 
 		stream.Send(&proto.ChatMessage{
-			Sender: clientName,
-			Room:   clientRoom,
+			Sender:   clientName,
+			Room:     clientRoom,
+			SenderId: clientID,
 		})
 
 		// Запустить горутину: читать из stream.Recv() → писать в WebSocket
@@ -97,9 +99,10 @@ func wsHandler(gateway *Gateway, cfg *config.Config) http.HandlerFunc {
 			}
 
 			stream.Send(&proto.ChatMessage{
-				Sender: clientName,
-				Room:   clientRoom,
-				Text:   string(msg),
+				Sender:   clientName,
+				Room:     clientRoom,
+				Text:     string(msg),
+				SenderId: clientID,
 			})
 		}
 	}
