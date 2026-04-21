@@ -16,11 +16,12 @@ type Database struct {
 }
 
 type MessageRow struct {
-	ID        uuid.UUID
+	ID        uuid.UUID `json:"id"`
 	SenderID  uuid.UUID `json:"sender_id"`
-	Sender    string
-	Text      string
-	CreatedAt time.Time
+	Sender    string    `json:"sender"`
+	Text      string    `json:"text"`
+	FileURL   string    `json:"file_url"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 func NewDatabase(cfg *config.Config) (*Database, error) {
@@ -113,12 +114,12 @@ func (db *Database) GetOrCreateRoom(ctx context.Context, name string) (uuid.UUID
 	return id, nil
 }
 
-func (db *Database) SaveMessage(ctx context.Context, roomID uuid.UUID, senderID uuid.UUID, text string) error {
+func (db *Database) SaveMessage(ctx context.Context, roomID uuid.UUID, msg MessageRow) error {
 
 	id := uuid.New()
 	_, err := db.conn.ExecContext(ctx,
-		"INSERT INTO msg (id, room_id, sender_id, text) VALUES ($1, $2, $3, $4)",
-		id, roomID, senderID, text,
+		"INSERT INTO msg (id, room_id, sender_id, text, file_url) VALUES ($1, $2, $3, $4, $5)",
+		id, roomID, msg.SenderID, msg.Text, msg.FileURL,
 	)
 	if err != nil {
 		return err
@@ -130,7 +131,7 @@ func (db *Database) SaveMessage(ctx context.Context, roomID uuid.UUID, senderID 
 
 func (db *Database) GetHistory(ctx context.Context, roomID uuid.UUID, limit int) ([]MessageRow, error) {
 
-	query := `SELECT m.id, u.username, m.text, m.created_at 
+	query := `SELECT m.id, u.username, m.text, m.file_url, m.created_at 
 	FROM msg m
 	JOIN users u ON m.sender_id = u.id
 	WHERE m.room_id = $1
@@ -146,7 +147,7 @@ func (db *Database) GetHistory(ctx context.Context, roomID uuid.UUID, limit int)
 	var messages []MessageRow
 	for rows.Next() {
 		var m MessageRow
-		if err := rows.Scan(&m.ID, &m.Sender, &m.Text, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.Sender, &m.Text, &m.FileURL, &m.CreatedAt); err != nil {
 			return nil, err
 		}
 		messages = append(messages, m)

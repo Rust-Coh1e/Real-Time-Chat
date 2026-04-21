@@ -77,7 +77,7 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 	// uuidRoomID, status := uuid.Parse(newHub)
 
 	// if status != nil {
-	// 	return status 
+	// 	return status
 	// }
 
 	hubID, ok := s.db.GetOrCreateRoom(ctx, newHub)
@@ -97,6 +97,7 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 		err := stream.Send(&proto.ChatMessage{
 			Sender:    history[i].Sender,
 			Text:      history[i].Text,
+			FileUrl:   history[i].FileURL,
 			SenderId:  history[i].SenderID.String(),
 			Timestamp: history[i].CreatedAt.Unix(),
 		})
@@ -155,6 +156,7 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 			SenderID:  msgID, // из JWT или первого сообщения
 			Sender:    msg.Sender,
 			Text:      msg.Text,
+			FileURL:   msg.FileUrl,
 			CreatedAt: time.Now(),
 		}
 

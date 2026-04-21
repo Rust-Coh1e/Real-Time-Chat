@@ -18,7 +18,7 @@ func NewMessageStore(db *Database, cache *RedisClient) *MessageStore {
 
 func (ms *MessageStore) SaveMessage(ctx context.Context, roomID uuid.UUID, msg MessageRow) error {
 	// 1. Postgres — надёжное хранилище
-	err := ms.db.SaveMessage(ctx, roomID, msg.SenderID, msg.Text)
+	err := ms.db.SaveMessage(ctx, roomID, msg)
 	if err != nil {
 		return err
 	}

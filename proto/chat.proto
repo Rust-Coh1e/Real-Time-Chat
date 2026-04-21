@@ -8,6 +8,7 @@ message ChatMessage {
     string room = 3;
     int64 timestamp = 4;
     string sender_id = 5;
+    string file_url = 6;
 }
 
 service ChatService {

@@ -28,6 +28,7 @@ type ChatMessage struct {
 	Room          string                 `protobuf:"bytes,3,opt,name=room,proto3" json:"room,omitempty"`
 	Timestamp     int64                  `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	SenderId      string                 `protobuf:"bytes,5,opt,name=sender_id,json=senderId,proto3" json:"sender_id,omitempty"`
+	FileUrl       string                 `protobuf:"bytes,6,opt,name=file_url,json=fileUrl,proto3" json:"file_url,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -97,17 +98,25 @@ func (x *ChatMessage) GetSenderId() string {
 	return ""
 }
 
+func (x *ChatMessage) GetFileUrl() string {
+	if x != nil {
+		return x.FileUrl
+	}
+	return ""
+}
+
 var File_proto_chat_proto protoreflect.FileDescriptor
 
 const file_proto_chat_proto_rawDesc = "" +
 	"\n" +
-	"\x10proto/chat.proto\"\x88\x01\n" +
+	"\x10proto/chat.proto\"\xa3\x01\n" +
 	"\vChatMessage\x12\x16\n" +
 	"\x06sender\x18\x01 \x01(\tR\x06sender\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x12\n" +
 	"\x04room\x18\x03 \x01(\tR\x04room\x12\x1c\n" +
 	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\x12\x1b\n" +
-	"\tsender_id\x18\x05 \x01(\tR\bsenderId25\n" +
+	"\tsender_id\x18\x05 \x01(\tR\bsenderId\x12\x19\n" +
+	"\bfile_url\x18\x06 \x01(\tR\afileUrl25\n" +
 	"\vChatService\x12&\n" +
 	"\x04Chat\x12\f.ChatMessage\x1a\f.ChatMessage(\x010\x01B\tZ\a./protob\x06proto3"
 

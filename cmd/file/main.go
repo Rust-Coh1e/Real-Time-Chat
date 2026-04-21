@@ -26,12 +26,12 @@ type FileService struct {
 
 func (fs *FileService) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
-	token := r.Header.Get("Authorization")
-	_, err := internal.ParseToken(token, fs.secret)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
+	// token := r.Header.Get("Authorization")
+	// _, err := internal.ParseToken(token, fs.secret)
+	// if err != nil {
+	// 	http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	// 	return
+	// }
 
 	// 1. Ограничиваем объем памяти для парсинга (например, 10 МБ).
 	// Если файл больше, он будет временно сохранен на диск.

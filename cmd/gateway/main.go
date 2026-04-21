@@ -25,6 +25,11 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+var wsMsg struct {
+	Text    string `json:"text"`
+	FileURL string `json:"file_url"`
+}
+
 func wsHandler(gateway *Gateway, cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -89,7 +94,23 @@ func wsHandler(gateway *Gateway, cfg *config.Config) http.HandlerFunc {
 			}
 		}()
 
-		// В основном цикле: читать из WebSocket → stream.Send()
+		// // В основном цикле: читать из WebSocket → stream.Send()
+		// for {
+		// 	_, msg, err := conn.ReadMessage()
+
+		// 	if err != nil {
+		// 		log.Println(err)
+		// 		return
+		// 	}
+
+		// 	stream.Send(&proto.ChatMessage{
+		// 		Sender:   clientName,
+		// 		Room:     clientRoom,
+		// 		Text:     string(msg),
+		// 		SenderId: clientID,
+		// 	})
+		// }
+
 		for {
 			_, msg, err := conn.ReadMessage()
 
@@ -98,10 +119,13 @@ func wsHandler(gateway *Gateway, cfg *config.Config) http.HandlerFunc {
 				return
 			}
 
+			json.Unmarshal(msg, &wsMsg)
+
 			stream.Send(&proto.ChatMessage{
 				Sender:   clientName,
 				Room:     clientRoom,
-				Text:     string(msg),
+				Text:     wsMsg.Text,
+				FileUrl:  wsMsg.FileURL,
 				SenderId: clientID,
 			})
 		}

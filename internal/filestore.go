@@ -34,6 +34,18 @@ func NewFileStore(ctx context.Context, cfg *config.Config) (*FileStore, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		policy := `{
+			"Version": "2012-10-17",
+			"Statement": [{
+				"Effect": "Allow",
+				"Principal": {"AWS": ["*"]},
+				"Action": ["s3:GetObject"],
+				"Resource": ["arn:aws:s3:::` + cfg.MinioBucket + `/*"]
+			}]
+		}`
+
+		newFS.SetBucketPolicy(ctx, cfg.MinioBucket, policy)
 	}
 
 	return &FileStore{

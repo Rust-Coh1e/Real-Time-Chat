@@ -16,7 +16,9 @@ CREATE TABLE IF NOT EXISTS msg (
     room_id UUID,
     sender_id UUID,
     text    TEXT NOT NULL,
+    file_url TEXT DEFAULT '',
     created_at  TIMESTAMP DEFAULT NOW(),
+
 
 
     FOREIGN KEY (room_id) REFERENCES Rooms(id),
