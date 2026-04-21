@@ -9,6 +9,9 @@ message ChatMessage {
     int64 timestamp = 4;
     string sender_id = 5;
     string file_url = 6;
+    string action = 7;      
+    string message_id = 8;  
+    string emoji = 9; 
 }
 
 service ChatService {

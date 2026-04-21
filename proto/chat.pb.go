@@ -29,6 +29,9 @@ type ChatMessage struct {
 	Timestamp     int64                  `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	SenderId      string                 `protobuf:"bytes,5,opt,name=sender_id,json=senderId,proto3" json:"sender_id,omitempty"`
 	FileUrl       string                 `protobuf:"bytes,6,opt,name=file_url,json=fileUrl,proto3" json:"file_url,omitempty"`
+	Action        string                 `protobuf:"bytes,7,opt,name=action,proto3" json:"action,omitempty"`
+	MessageId     string                 `protobuf:"bytes,8,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	Emoji         string                 `protobuf:"bytes,9,opt,name=emoji,proto3" json:"emoji,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -105,18 +108,43 @@ func (x *ChatMessage) GetFileUrl() string {
 	return ""
 }
 
+func (x *ChatMessage) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *ChatMessage) GetMessageId() string {
+	if x != nil {
+		return x.MessageId
+	}
+	return ""
+}
+
+func (x *ChatMessage) GetEmoji() string {
+	if x != nil {
+		return x.Emoji
+	}
+	return ""
+}
+
 var File_proto_chat_proto protoreflect.FileDescriptor
 
 const file_proto_chat_proto_rawDesc = "" +
 	"\n" +
-	"\x10proto/chat.proto\"\xa3\x01\n" +
+	"\x10proto/chat.proto\"\xf0\x01\n" +
 	"\vChatMessage\x12\x16\n" +
 	"\x06sender\x18\x01 \x01(\tR\x06sender\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x12\n" +
 	"\x04room\x18\x03 \x01(\tR\x04room\x12\x1c\n" +
 	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\x12\x1b\n" +
 	"\tsender_id\x18\x05 \x01(\tR\bsenderId\x12\x19\n" +
-	"\bfile_url\x18\x06 \x01(\tR\afileUrl25\n" +
+	"\bfile_url\x18\x06 \x01(\tR\afileUrl\x12\x16\n" +
+	"\x06action\x18\a \x01(\tR\x06action\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\b \x01(\tR\tmessageId\x12\x14\n" +
+	"\x05emoji\x18\t \x01(\tR\x05emoji25\n" +
 	"\vChatService\x12&\n" +
 	"\x04Chat\x12\f.ChatMessage\x1a\f.ChatMessage(\x010\x01B\tZ\a./protob\x06proto3"
 

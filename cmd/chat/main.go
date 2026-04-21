@@ -109,6 +109,7 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 	// историю получили
 
 	go func() {
+		// ________этот for отвечает зо CHANEL -> GATEAWAY __________________
 		for msg := range currClient.Chan {
 
 			var chatMsg proto.ChatMessage
@@ -125,6 +126,7 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 		}
 	}()
 
+	// ________этот for отвечает зо GateAway -> BD/Redis __________________
 	for {
 		msg, err := stream.Recv()
 
@@ -133,43 +135,96 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 			return err
 		}
 
-		// currMsg := NewMessage(c.Name, string(msg), time.Now())
-		data, err := json.Marshal(msg)
+		switch msg.Action {
+		case "", "send":
+			// currMsg := NewMessage(c.Name, string(msg), time.Now())
+			newMsgID := uuid.New()
+			msg.MessageId = newMsgID.String()
 
-		if err != nil {
-			log.Println(err)
-			return err
-		}
+			data, err := json.Marshal(msg)
 
-		// Тут нужно запушить сообщение в redis
-		// s.rdb.SaveMessage(ctx, newHub, data)
-		msgID, err := uuid.Parse(msg.SenderId)
+			if err != nil {
+				log.Println(err)
+				return err
+			}
 
-		if err != nil {
-			log.Println(err)
-			return err
-		}
+			// Тут нужно запушить сообщение в redis
+			// s.rdb.SaveMessage(ctx, newHub, data)
+			msgID, err := uuid.Parse(msg.SenderId)
 
-		// Теперь тут надо сделать Cache aside
-		msgRow := internal.MessageRow{
-			ID:        uuid.New(),
-			SenderID:  msgID, // из JWT или первого сообщения
-			Sender:    msg.Sender,
-			Text:      msg.Text,
-			FileURL:   msg.FileUrl,
-			CreatedAt: time.Now(),
-		}
+			if err != nil {
+				log.Println(err)
+				return err
+			}
 
-		s.ms.SaveMessage(ctx, hubID, msgRow)
+			// Теперь тут надо сделать Cache aside
+			msgRow := internal.MessageRow{
+				ID:        newMsgID,
+				SenderID:  msgID, // из JWT или первого сообщения
+				Sender:    msg.Sender,
+				Text:      msg.Text,
+				FileURL:   msg.FileUrl,
+				CreatedAt: time.Now(),
+			}
 
-		// defer c.Conn.Close()
+			s.ms.SaveMessage(ctx, hubID, msgRow)
 
-		// currClient.CurrentHub.Broadcast <- data
+			// defer c.Conn.Close()
 
-		// тут надо запушить сообщение в Sub
-		err = s.rdb.Publish(ctx, newHub, data)
-		if err != nil {
-			hub.Broadcast <- data
+			// currClient.CurrentHub.Broadcast <- data
+
+			// тут надо запушить сообщение в Sub
+			err = s.rdb.Publish(ctx, newHub, data)
+			if err != nil {
+				hub.Broadcast <- data
+			}
+
+		case "edit":
+			log.Println("Edit:", msg.MessageId, "sender:", msg.SenderId)
+			msgUuid, _ := uuid.Parse(msg.MessageId)
+			senderUuid, _ := uuid.Parse(msg.SenderId)
+			err := s.db.EditMessage(ctx, msgUuid, senderUuid, msg.Text)
+			if err != nil {
+				log.Println("edit denied:", err)
+				continue
+			}
+			data, _ := json.Marshal(msg)
+			if err := s.rdb.Publish(ctx, newHub, data); err != nil {
+				hub.Broadcast <- data
+			}
+
+		case "delete":
+			msgUuid, err := uuid.Parse(msg.MessageId)
+			if err != nil {
+				return err
+			}
+
+			s.db.RemoveMessage(ctx, msgUuid)
+
+			data, _ := json.Marshal(msg)
+			if err := s.rdb.Publish(ctx, newHub, data); err != nil {
+				hub.Broadcast <- data
+			}
+
+		case "react":
+
+			msgUuid, err := uuid.Parse(msg.MessageId)
+			if err != nil {
+				return err
+			}
+
+			userUuid, err := uuid.Parse(msg.SenderId)
+			if err != nil {
+				return err
+			}
+
+			s.db.ToggleReaction(ctx, msgUuid, userUuid, msg.Emoji)
+
+			data, _ := json.Marshal(msg)
+			if err := s.rdb.Publish(ctx, newHub, data); err != nil {
+				hub.Broadcast <- data
+			}
+
 		}
 
 	}

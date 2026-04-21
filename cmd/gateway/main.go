@@ -25,10 +25,13 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-var wsMsg struct {
-	Text    string `json:"text"`
-	FileURL string `json:"file_url"`
-}
+// var wsMsg struct {
+// 	Text      string `json:"text"`
+// 	FileURL   string `json:"file_url"`
+// 	Action    string `json:"action"`
+// 	MessageID string `json:"message_id"`
+// 	Emoji     string `json:"emoji"`
+// }
 
 func wsHandler(gateway *Gateway, cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -119,14 +122,25 @@ func wsHandler(gateway *Gateway, cfg *config.Config) http.HandlerFunc {
 				return
 			}
 
+			var wsMsg struct {
+				Text      string `json:"text"`
+				FileURL   string `json:"file_url"`
+				Action    string `json:"action"`
+				MessageID string `json:"message_id"`
+				Emoji     string `json:"emoji"`
+			}
+
 			json.Unmarshal(msg, &wsMsg)
 
 			stream.Send(&proto.ChatMessage{
-				Sender:   clientName,
-				Room:     clientRoom,
-				Text:     wsMsg.Text,
-				FileUrl:  wsMsg.FileURL,
-				SenderId: clientID,
+				Sender:    clientName,
+				SenderId:  clientID,
+				Room:      clientRoom,
+				Text:      wsMsg.Text,
+				FileUrl:   wsMsg.FileURL,
+				Action:    wsMsg.Action,
+				MessageId: wsMsg.MessageID,
+				Emoji:     wsMsg.Emoji,
 			})
 		}
 	}

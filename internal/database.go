@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"real-time-chat/config"
 	"time"
 
@@ -116,10 +117,10 @@ func (db *Database) GetOrCreateRoom(ctx context.Context, name string) (uuid.UUID
 
 func (db *Database) SaveMessage(ctx context.Context, roomID uuid.UUID, msg MessageRow) error {
 
-	id := uuid.New()
+	// id := uuid.New()
 	_, err := db.conn.ExecContext(ctx,
 		"INSERT INTO msg (id, room_id, sender_id, text, file_url) VALUES ($1, $2, $3, $4, $5)",
-		id, roomID, msg.SenderID, msg.Text, msg.FileURL,
+		msg.ID, roomID, msg.SenderID, msg.Text, msg.FileURL,
 	)
 	if err != nil {
 		return err
@@ -155,4 +156,84 @@ func (db *Database) GetHistory(ctx context.Context, roomID uuid.UUID, limit int)
 
 	return messages, rows.Err()
 
+}
+
+func (db *Database) EditMessage(ctx context.Context, messageID, senderID uuid.UUID, newText string) error {
+
+	result, status := db.conn.ExecContext(ctx,
+		"UPDATE msg SET text = $1 WHERE id = $2 and sender_id = $3",
+		newText, messageID.String(), senderID.String(),
+	)
+	if status != nil {
+		return status
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("not found or not author")
+	}
+	return nil
+}
+
+func (db *Database) RemoveMessage(ctx context.Context, messageID uuid.UUID) error {
+
+	_, status := db.conn.ExecContext(ctx,
+		"DELETE FROM msg WHERE id = $1;",
+		messageID.String(),
+	)
+	if status != nil {
+		return status
+	}
+
+	return nil
+
+}
+
+// func (db *Database) AddReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error {
+// 	// AddReaction: INSERT INTO reactions (id, message_id, user_id, emoji) VALUES ($1, $2, $3, $4)
+// 	query := `INSERT INTO reactions (id, message_id, user_id, emoji) VALUES ($1, $2, $3, $4);`
+
+// 	id := uuid.New()
+// 	_, err := db.conn.ExecContext(ctx,
+// 		query,
+// 		id, messageID, userID, emoji,
+// 	)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	return nil
+// }
+
+// func (db *Database) RemoveReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error {
+
+// 	query := `DELETE FROM reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3`
+
+// 	_, err := db.conn.ExecContext(ctx, query, messageID, userID, emoji)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	return nil
+// }
+
+func (db *Database) ToggleReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error {
+	result, err := db.conn.ExecContext(ctx,
+		"DELETE FROM reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3",
+		messageID, userID, emoji,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		id := uuid.New()
+		_, err = db.conn.ExecContext(ctx,
+			"INSERT INTO reactions (id, message_id, user_id, emoji) VALUES ($1, $2, $3, $4)",
+			id, messageID, userID, emoji,
+		)
+		return err
+	}
+	return nil
 }

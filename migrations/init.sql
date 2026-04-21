@@ -27,3 +27,13 @@ CREATE TABLE IF NOT EXISTS msg (
 );
 
 CREATE INDEX idx_msg_room_created ON msg(room_id, created_at);
+
+
+CREATE TABLE IF NOT EXISTS reactions (
+    id UUID PRIMARY KEY,
+    message_id UUID REFERENCES msg(id),
+    user_id UUID REFERENCES users(id),
+    emoji TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(message_id, user_id, emoji)
+);
