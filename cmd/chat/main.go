@@ -77,7 +77,7 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 	// uuidRoomID, status := uuid.Parse(newHub)
 
 	// if status != nil {
-	// 	return status
+	// 	return status 
 	// }
 
 	hubID, ok := s.db.GetOrCreateRoom(ctx, newHub)
