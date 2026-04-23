@@ -193,3 +193,11 @@ func (chat *ChatService) GetUserRooms(ctx context.Context, userID string) ([]str
 	}
 	return chat.db.GetUserRooms(ctx, id)
 }
+
+func (chat *ChatService) GetHistory(ctx context.Context, room string, limit int) ([]model.MessageRow, error) {
+	roomID, err := chat.db.GetOrCreateRoom(ctx, room)
+	if err != nil {
+		return nil, err
+	}
+	return chat.ms.GetHistory(ctx, roomID, limit)
+}

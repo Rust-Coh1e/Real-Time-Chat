@@ -110,16 +110,24 @@ func (s *ChatServer) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pro
 			Room:   roomName,
 			Sender: msg.Sender,
 		})
+
+		history, err := s.chatService.GetHistory(ctx, roomName, 50)
+		if err != nil {
+			log.Println("history error:", err)
+			continue
+		}
+		for i := len(history) - 1; i >= 0; i-- {
+			stream.Send(&proto.ChatMessage{
+				Sender:    history[i].Sender,
+				Text:      history[i].Text,
+				FileUrl:   history[i].FileURL,
+				SenderId:  history[i].SenderID.String(),
+				MessageId: history[i].ID.String(),
+				Timestamp: history[i].CreatedAt.Unix(),
+				Room:      roomName,
+			})
+		}
 	}
-
-	// currClient := internal.NewClient(hub, msg.Sender)
-	// hub.Register <- currClient
-
-	// Тут нужно добавить клиента в Redis
-
-	// Нужно подтянуть историю
-
-	// историю получили
 
 	// ________этот for отвечает зо GateAway -> BD/Redis __________________
 	for {
