@@ -69,8 +69,8 @@ func wsHandler(gateway *Gateway, cfg *config.Config) http.HandlerFunc {
 		log.Println("New client:", clientName, " Hub ", clientRoom)
 
 		stream.Send(&proto.ChatMessage{
-			Sender:   clientName,
-			Room:     clientRoom,
+			Sender: clientName,
+			// Room:     clientRoom,
 			SenderId: clientID,
 		})
 
@@ -128,6 +128,7 @@ func wsHandler(gateway *Gateway, cfg *config.Config) http.HandlerFunc {
 				Action    string `json:"action"`
 				MessageID string `json:"message_id"`
 				Emoji     string `json:"emoji"`
+				Room      string `json:"room"`
 			}
 
 			json.Unmarshal(msg, &wsMsg)
@@ -135,7 +136,7 @@ func wsHandler(gateway *Gateway, cfg *config.Config) http.HandlerFunc {
 			stream.Send(&proto.ChatMessage{
 				Sender:    clientName,
 				SenderId:  clientID,
-				Room:      clientRoom,
+				Room:      wsMsg.Room,
 				Text:      wsMsg.Text,
 				FileUrl:   wsMsg.FileURL,
 				Action:    wsMsg.Action,

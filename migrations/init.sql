@@ -37,3 +37,11 @@ CREATE TABLE IF NOT EXISTS reactions (
     created_at TIMESTAMP DEFAULT NOW(),
     UNIQUE(message_id, user_id, emoji)
 );
+
+
+CREATE TABLE IF NOT EXISTS room_members (
+    room_id UUID REFERENCES rooms(id),
+    user_id UUID REFERENCES users(id),
+    joined_at TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (room_id, user_id)
+);

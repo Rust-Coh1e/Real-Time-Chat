@@ -237,3 +237,58 @@ func (db *Database) ToggleReaction(ctx context.Context, messageID, userID uuid.U
 	}
 	return nil
 }
+
+func (db *Database) JoinRoom(ctx context.Context, roomID, userID uuid.UUID) error {
+
+	// id := uuid.New()
+	_, err := db.conn.ExecContext(ctx,
+		"INSERT INTO room_members (room_id, user_id) VALUES ($1, $2)",
+		roomID, userID,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+func (db *Database) LeaveRoom(ctx context.Context, roomID, userID uuid.UUID) error {
+
+	// id := uuid.New()
+	_, err := db.conn.ExecContext(ctx,
+		"DELETE FROM  room_members WHERE room_id = $1 and user_id = $2",
+		roomID, userID,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+func (db *Database) GetUserRooms(ctx context.Context, userID uuid.UUID) ([]string, error) {
+
+	rows, err := db.conn.QueryContext(ctx,
+		"SELECT r.name FROM room_members rm JOIN rooms r ON rm.room_id = r.id WHERE rm.user_id = $1",
+		userID,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var roomIDs []string
+
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		roomIDs = append(roomIDs, id)
+	}
+
+	return roomIDs, rows.Err()
+}
