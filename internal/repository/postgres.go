@@ -1,10 +1,11 @@
-package internal
+package repository
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
 	"real-time-chat/config"
+	"real-time-chat/internal/model"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,20 +13,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type Database struct {
+type Postgres struct {
 	conn *sql.DB
 }
 
-type MessageRow struct {
-	ID        uuid.UUID `json:"id"`
-	SenderID  uuid.UUID `json:"sender_id"`
-	Sender    string    `json:"sender"`
-	Text      string    `json:"text"`
-	FileURL   string    `json:"file_url"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-func NewDatabase(cfg *config.Config) (*Database, error) {
+func NewPostgres(cfg *config.Config) (*Postgres, error) {
 	// собрать connString из cfg
 	// connString := `postgres://user:password@127.0.0.1:5433/urlshortener?sslmode=disable`
 	connString := "postgres://" + cfg.DBUser + ":" + cfg.DBPassword + "@" + cfg.DBHost + ":" + cfg.DBPort + "/" + cfg.DBName + "?sslmode=disable"
@@ -43,10 +35,10 @@ func NewDatabase(cfg *config.Config) (*Database, error) {
 	db.SetMaxIdleConns(100)
 	db.SetConnMaxLifetime(time.Minute)
 
-	return &Database{conn: db}, nil
+	return &Postgres{conn: db}, nil
 }
 
-func (db *Database) CreateUser(ctx context.Context, username, password string) (uuid.UUID, error) {
+func (db *Postgres) CreateUser(ctx context.Context, username, password string) (uuid.UUID, error) {
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -66,7 +58,7 @@ func (db *Database) CreateUser(ctx context.Context, username, password string) (
 	return id, nil
 }
 
-func (db *Database) GetUserByName(ctx context.Context, username string) (uuid.UUID, string, error) {
+func (db *Postgres) GetUserByName(ctx context.Context, username string) (uuid.UUID, string, error) {
 
 	query := `SELECT id, password_hash FROM users WHERE username = $1`
 
@@ -89,7 +81,7 @@ func (db *Database) GetUserByName(ctx context.Context, username string) (uuid.UU
 	return id, hash, nil
 }
 
-func (db *Database) GetOrCreateRoom(ctx context.Context, name string) (uuid.UUID, error) {
+func (db *Postgres) GetOrCreateRoom(ctx context.Context, name string) (uuid.UUID, error) {
 
 	query := `SELECT id FROM rooms WHERE name = $1`
 
@@ -115,7 +107,7 @@ func (db *Database) GetOrCreateRoom(ctx context.Context, name string) (uuid.UUID
 	return id, nil
 }
 
-func (db *Database) SaveMessage(ctx context.Context, roomID uuid.UUID, msg MessageRow) error {
+func (db *Postgres) SaveMessage(ctx context.Context, roomID uuid.UUID, msg model.MessageRow) error {
 
 	// id := uuid.New()
 	_, err := db.conn.ExecContext(ctx,
@@ -130,7 +122,7 @@ func (db *Database) SaveMessage(ctx context.Context, roomID uuid.UUID, msg Messa
 
 }
 
-func (db *Database) GetHistory(ctx context.Context, roomID uuid.UUID, limit int) ([]MessageRow, error) {
+func (db *Postgres) GetHistory(ctx context.Context, roomID uuid.UUID, limit int) ([]model.MessageRow, error) {
 
 	query := `SELECT m.id, u.username, m.text, m.file_url, m.created_at 
 	FROM msg m
@@ -145,9 +137,9 @@ func (db *Database) GetHistory(ctx context.Context, roomID uuid.UUID, limit int)
 	}
 	defer rows.Close()
 
-	var messages []MessageRow
+	var messages []model.MessageRow
 	for rows.Next() {
-		var m MessageRow
+		var m model.MessageRow
 		if err := rows.Scan(&m.ID, &m.Sender, &m.Text, &m.FileURL, &m.CreatedAt); err != nil {
 			return nil, err
 		}
@@ -158,7 +150,7 @@ func (db *Database) GetHistory(ctx context.Context, roomID uuid.UUID, limit int)
 
 }
 
-func (db *Database) EditMessage(ctx context.Context, messageID, senderID uuid.UUID, newText string) error {
+func (db *Postgres) EditMessage(ctx context.Context, messageID, senderID uuid.UUID, newText string) error {
 
 	result, status := db.conn.ExecContext(ctx,
 		"UPDATE msg SET text = $1 WHERE id = $2 and sender_id = $3",
@@ -175,7 +167,7 @@ func (db *Database) EditMessage(ctx context.Context, messageID, senderID uuid.UU
 	return nil
 }
 
-func (db *Database) RemoveMessage(ctx context.Context, messageID uuid.UUID) error {
+func (db *Postgres) RemoveMessage(ctx context.Context, messageID uuid.UUID) error {
 
 	_, status := db.conn.ExecContext(ctx,
 		"DELETE FROM msg WHERE id = $1;",
@@ -189,35 +181,7 @@ func (db *Database) RemoveMessage(ctx context.Context, messageID uuid.UUID) erro
 
 }
 
-// func (db *Database) AddReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error {
-// 	// AddReaction: INSERT INTO reactions (id, message_id, user_id, emoji) VALUES ($1, $2, $3, $4)
-// 	query := `INSERT INTO reactions (id, message_id, user_id, emoji) VALUES ($1, $2, $3, $4);`
-
-// 	id := uuid.New()
-// 	_, err := db.conn.ExecContext(ctx,
-// 		query,
-// 		id, messageID, userID, emoji,
-// 	)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	return nil
-// }
-
-// func (db *Database) RemoveReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error {
-
-// 	query := `DELETE FROM reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3`
-
-// 	_, err := db.conn.ExecContext(ctx, query, messageID, userID, emoji)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	return nil
-// }
-
-func (db *Database) ToggleReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error {
+func (db *Postgres) ToggleReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error {
 	result, err := db.conn.ExecContext(ctx,
 		"DELETE FROM reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3",
 		messageID, userID, emoji,
@@ -238,7 +202,7 @@ func (db *Database) ToggleReaction(ctx context.Context, messageID, userID uuid.U
 	return nil
 }
 
-func (db *Database) JoinRoom(ctx context.Context, roomID, userID uuid.UUID) error {
+func (db *Postgres) JoinRoom(ctx context.Context, roomID, userID uuid.UUID) error {
 
 	// id := uuid.New()
 	_, err := db.conn.ExecContext(ctx,
@@ -253,7 +217,7 @@ func (db *Database) JoinRoom(ctx context.Context, roomID, userID uuid.UUID) erro
 
 }
 
-func (db *Database) LeaveRoom(ctx context.Context, roomID, userID uuid.UUID) error {
+func (db *Postgres) LeaveRoom(ctx context.Context, roomID, userID uuid.UUID) error {
 
 	// id := uuid.New()
 	_, err := db.conn.ExecContext(ctx,
@@ -268,7 +232,7 @@ func (db *Database) LeaveRoom(ctx context.Context, roomID, userID uuid.UUID) err
 
 }
 
-func (db *Database) GetUserRooms(ctx context.Context, userID uuid.UUID) ([]string, error) {
+func (db *Postgres) GetUserRooms(ctx context.Context, userID uuid.UUID) ([]string, error) {
 
 	rows, err := db.conn.QueryContext(ctx,
 		"SELECT r.name FROM room_members rm JOIN rooms r ON rm.room_id = r.id WHERE rm.user_id = $1",

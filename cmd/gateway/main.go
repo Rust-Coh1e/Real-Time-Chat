@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 	"real-time-chat/config"
-	"real-time-chat/internal"
+	"real-time-chat/internal/jwt"
 	"real-time-chat/proto"
 
 	"github.com/gorilla/websocket"
@@ -38,7 +38,7 @@ func wsHandler(gateway *Gateway, cfg *config.Config) http.HandlerFunc {
 
 		clientToken := r.URL.Query().Get("token")
 		// clientRoom := r.URL.Query().Get("room")
-		clientClaims, err := internal.ParseToken(clientToken, cfg.Secret)
+		clientClaims, err := jwt.ParseToken(clientToken, cfg.Secret)
 
 		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)

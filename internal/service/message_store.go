@@ -1,22 +1,24 @@
-package internal
+package service
 
 import (
 	"context"
 	"encoding/json"
+	"real-time-chat/internal/model"
+	"real-time-chat/internal/repository"
 
 	"github.com/google/uuid"
 )
 
 type MessageStore struct {
-	db    *Database
-	cache *RedisClient
+	db    *repository.Postgres
+	cache *repository.RedisClient
 }
 
-func NewMessageStore(db *Database, cache *RedisClient) *MessageStore {
+func NewMessageStore(db *repository.Postgres, cache *repository.RedisClient) *MessageStore {
 	return &MessageStore{db: db, cache: cache}
 }
 
-func (ms *MessageStore) SaveMessage(ctx context.Context, roomID uuid.UUID, msg MessageRow) error {
+func (ms *MessageStore) SaveMessage(ctx context.Context, roomID uuid.UUID, msg model.MessageRow) error {
 	// 1. Postgres — надёжное хранилище
 	err := ms.db.SaveMessage(ctx, roomID, msg)
 	if err != nil {
@@ -30,13 +32,13 @@ func (ms *MessageStore) SaveMessage(ctx context.Context, roomID uuid.UUID, msg M
 	return nil
 }
 
-func (ms *MessageStore) GetHistory(ctx context.Context, roomID uuid.UUID, limit int) ([]MessageRow, error) {
+func (ms *MessageStore) GetHistory(ctx context.Context, roomID uuid.UUID, limit int) ([]model.MessageRow, error) {
 	// 1. Пробуем Redis
 	cached, err := ms.cache.GetHistory(ctx, roomID.String())
 	if err == nil && len(cached) > 0 {
-		var messages []MessageRow
+		var messages []model.MessageRow
 		for _, s := range cached {
-			var m MessageRow
+			var m model.MessageRow
 			if err := json.Unmarshal([]byte(s), &m); err == nil {
 				messages = append(messages, m)
 			}

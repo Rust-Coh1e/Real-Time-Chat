@@ -9,14 +9,14 @@ import (
 	"os"
 	"os/signal"
 	"real-time-chat/config"
-	"real-time-chat/internal"
+	"real-time-chat/internal/repository"
 	"real-time-chat/middleware"
 	"syscall"
 	"time"
 )
 
 type FileService struct {
-	store  *internal.FileStore
+	store  *repository.FileStore
 	secret string
 }
 
@@ -77,7 +77,7 @@ func main() {
 		panic(err)
 	}
 
-	fileStore, err := internal.NewFileStore(context.Background(), cfg)
+	fileStore, err := repository.NewFileStore(context.Background(), cfg)
 	if err != nil {
 		panic(err)
 	}

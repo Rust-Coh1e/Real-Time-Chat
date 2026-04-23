@@ -7,33 +7,34 @@ import (
 	"log"
 	"net"
 	"real-time-chat/config"
-	"real-time-chat/internal"
+	"real-time-chat/internal/hub"
+	"real-time-chat/internal/repository"
+	"real-time-chat/internal/service"
 	"real-time-chat/proto"
-	"time"
 
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
 )
 
-type ChatService struct {
-	hubs *internal.HubManager
-	rdb  *internal.RedisClient
-	ms   *internal.MessageStore
-	db   *internal.Database
+type ChatServer struct {
+	chatService *service.ChatService
+	hubs        *hub.HubManager
+	rdb         *repository.RedisClient
 	proto.UnimplementedChatServiceServer
 }
 
-func NewChatService(hubs *internal.HubManager, rdb *internal.RedisClient, db *internal.Database) *ChatService {
-	ms := internal.NewMessageStore(db, rdb)
-	return &ChatService{
-		hubs: hubs,
-		rdb:  rdb,
-		ms:   ms,
-		db:   db,
+// Конкструктор
+
+func NewChatServer(cs *service.ChatService, hubs *hub.HubManager, rdb *repository.RedisClient) *ChatServer {
+	return &ChatServer{
+		chatService: cs,
+		hubs:        hubs,
+		rdb:         rdb,
 	}
 }
 
-func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, proto.ChatMessage]) error {
+// ТРАНСПОРТ
+
+func (s *ChatServer) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, proto.ChatMessage]) error {
 	// First message
 	msg, err := stream.Recv()
 	ctx := stream.Context()
@@ -44,11 +45,7 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 		return err
 	}
 
-	// newClient := msg.Sender
-	// newHub := msg.Room
-	currUser, _ := uuid.Parse(msg.SenderId)
-
-	Hubs, err := s.db.GetUserRooms(ctx, currUser)
+	Hubs, err := s.chatService.GetUserRooms(ctx, msg.SenderId)
 
 	if err != nil {
 		return err
@@ -57,7 +54,7 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 	log.Println("User connected:", msg.Sender, "ID:", msg.SenderId)
 	log.Println("User rooms:", Hubs)
 
-	clients := make(map[string]*internal.Client)
+	clients := make(map[string]*hub.Client)
 
 	defer func() {
 		for roomName, client := range clients {
@@ -78,7 +75,7 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 			}()
 		})
 
-		currClient := internal.NewClient(currHub, msg.Sender)
+		currClient := hub.NewClient(currHub, msg.Sender)
 		currHub.Register <- currClient
 
 		clients[currHub.Name] = currClient
@@ -137,124 +134,86 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 
 		switch msg.Action {
 		case "", "send":
-			// currMsg := NewMessage(c.Name, string(msg), time.Now())
-
+			// Проверить на соответствие руме
+			if _, ok := clients[msg.Room]; !ok {
+				log.Println("user not in room:", msg.Room)
+				continue
+			}
+			// бизнес логика
+			data, err := s.chatService.SendMessage(ctx, msg.Room, msg.SenderId, msg.Sender, msg.Text, msg.FileUrl)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			// fallback
 			hub := s.hubs.GetOrMake(msg.Room)
-			roomID, _ := s.db.GetOrCreateRoom(ctx, msg.Room)
+			if err := s.rdb.Publish(ctx, msg.Room, data); err != nil {
+				hub.Broadcast <- data
+			}
 
-			newMsgID := uuid.New()
-
-			msg.MessageId = newMsgID.String()
+		case "edit":
 
 			if _, ok := clients[msg.Room]; !ok {
 				log.Println("user not in room:", msg.Room)
 				continue
 			}
-			// hubID, _ := uuid.Parse(msg.Room)
 
-			data, err := json.Marshal(msg)
-
-			if err != nil {
-				log.Println(err)
-				return err
-			}
-
-			// Тут нужно запушить сообщение в redis
-			// s.rdb.SaveMessage(ctx, newHub, data)
-			msgID, err := uuid.Parse(msg.SenderId)
-
-			if err != nil {
-				log.Println(err)
-				return err
-			}
-
-			// Теперь тут надо сделать Cache aside
-			msgRow := internal.MessageRow{
-				ID:        newMsgID,
-				SenderID:  msgID, // из JWT или первого сообщения
-				Sender:    msg.Sender,
-				Text:      msg.Text,
-				FileURL:   msg.FileUrl,
-				CreatedAt: time.Now(),
-			}
-
-			s.ms.SaveMessage(ctx, roomID, msgRow)
-
-			// defer c.Conn.Close()
-
-			// currClient.CurrentHub.Broadcast <- data
-
-			// тут надо запушить сообщение в Sub
-			err = s.rdb.Publish(ctx, msg.Room, data)
-			if err != nil {
-				hub.Broadcast <- data
-			}
-
-		case "edit":
-			hub := s.hubs.GetOrMake(msg.Room)
-
-			log.Println("Edit:", msg.MessageId, "sender:", msg.SenderId)
-
-			msgUuid, _ := uuid.Parse(msg.MessageId)
-			senderUuid, _ := uuid.Parse(msg.SenderId)
-
-			err := s.db.EditMessage(ctx, msgUuid, senderUuid, msg.Text)
+			data, err := s.chatService.EditMessage(ctx, msg.Room, msg.MessageId, msg.SenderId, msg.Text)
 			if err != nil {
 				log.Println("edit denied:", err)
 				continue
 			}
-			data, _ := json.Marshal(msg)
-			if err := s.rdb.Publish(ctx, hub.Name, data); err != nil {
+
+			hub := s.hubs.GetOrMake(msg.Room)
+			if err := s.rdb.Publish(ctx, msg.Room, data); err != nil {
 				hub.Broadcast <- data
 			}
 
 		case "delete":
 
-			hub := s.hubs.GetOrMake(msg.Room)
-			msgUuid, err := uuid.Parse(msg.MessageId)
-			if err != nil {
-				return err
+			if _, ok := clients[msg.Room]; !ok {
+				log.Println("user not in room:", msg.Room)
+				continue
 			}
 
-			s.db.RemoveMessage(ctx, msgUuid)
+			data, err := s.chatService.DeleteMessage(ctx, msg.Room, msg.MessageId)
+			if err != nil {
+				log.Println("delete denied:", err)
+				continue
+			}
 
-			data, _ := json.Marshal(msg)
-			if err := s.rdb.Publish(ctx, hub.Name, data); err != nil {
+			hub := s.hubs.GetOrMake(msg.Room)
+			if err := s.rdb.Publish(ctx, msg.Room, data); err != nil {
 				hub.Broadcast <- data
 			}
 
 		case "react":
-			hub := s.hubs.GetOrMake(msg.Room)
 
-			msgUuid, err := uuid.Parse(msg.MessageId)
-			if err != nil {
-				return err
-			}
-
-			userUuid, err := uuid.Parse(msg.SenderId)
-			if err != nil {
-				return err
-			}
-
-			s.db.ToggleReaction(ctx, msgUuid, userUuid, msg.Emoji)
-
-			data, _ := json.Marshal(msg)
-			if err := s.rdb.Publish(ctx, hub.Name, data); err != nil {
-				hub.Broadcast <- data
-			}
-		case "join":
-			if _, ok := clients[msg.Room]; ok {
-				log.Println("already in room:", msg.Room)
+			if _, ok := clients[msg.Room]; !ok {
+				log.Println("user not in room:", msg.Room)
 				continue
 			}
 
-			roomID, _ := s.db.GetOrCreateRoom(ctx, msg.Room)
-			senderID, _ := uuid.Parse(msg.SenderId)
-			s.db.JoinRoom(ctx, roomID, senderID)
+			data, err := s.chatService.ReactMessage(ctx, msg.Room, msg.MessageId, msg.SenderId, msg.Emoji)
+			if err != nil {
+				continue
+			}
 
 			hub := s.hubs.GetOrMake(msg.Room)
-			client := internal.NewClient(hub, msg.Sender)
-			hub.Register <- client
+			if err := s.rdb.Publish(ctx, msg.Room, data); err != nil {
+				hub.Broadcast <- data
+			}
+
+		case "join":
+			if _, ok := clients[msg.Room]; ok {
+				continue // уже в комнате
+			}
+			s.chatService.JoinRoom(ctx, msg.Room, msg.SenderId)
+
+			// создание Hub, Client, горутина — остаётся тут
+			currHub := s.hubs.GetOrMake(msg.Room)
+			client := hub.NewClient(currHub, msg.Sender)
+			currHub.Register <- client
 			clients[msg.Room] = client
 
 			go func() {
@@ -266,13 +225,19 @@ func (s *ChatService) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pr
 			}()
 
 		case "leave":
-			roomID, _ := s.db.GetOrCreateRoom(ctx, msg.Room)
-			senderID, _ := uuid.Parse(msg.SenderId)
-			s.db.LeaveRoom(ctx, roomID, senderID)
+			if _, ok := clients[msg.Room]; !ok {
+				log.Println("user not in room:", msg.Room)
+				continue
+			}
 
-			if client, ok := clients[msg.Room]; ok {
-				client.CurrentHub.Unregister <- client
-				delete(clients, msg.Room)
+			data, err := s.chatService.DeleteMessage(ctx, msg.Room, msg.MessageId)
+			if err != nil {
+				continue
+			}
+
+			hub := s.hubs.GetOrMake(msg.Room)
+			if err := s.rdb.Publish(ctx, msg.Room, data); err != nil {
+				hub.Broadcast <- data
 			}
 		}
 	}
@@ -283,32 +248,31 @@ func main() {
 	flag.Parse()
 
 	// Создать HubManager
-	mHub := internal.NewHubManager()
+
 	// Создать ChatService
 
 	// TODO env конфиг
 	cfg, err := config.Load()
-	// redisURL := "redis://localhost:6379/0"
-	if err != nil {
-		log.Println("Error: Dont find env file")
-		return
-	}
 
-	db, err := internal.NewDatabase(cfg)
-
+	// 1. Инфра
+	db, _ := repository.NewPostgres(cfg)
 	if err != nil {
 		log.Println("Error: Cant connect to DB")
 		return
 	}
 
-	rdb := internal.NewRedisClient(cfg.RedisPort, 50)
+	rdb := repository.NewRedisClient(cfg.RedisPort, 50)
+	hubs := hub.NewHubManager()
 
-	mChatService := NewChatService(mHub, rdb, db)
+	// 2. Service
+	chatService := service.NewChatService(hubs, rdb, db)
 
-	// Создать gRPC сервер — grpc.NewServer()
-	mGRPC := grpc.NewServer()
-	log.Println("New stream opened")
-	proto.RegisterChatServiceServer(mGRPC, mChatService)
+	// 3. Transport
+	chatServer := NewChatServer(chatService, hubs, rdb)
+
+	// 4. gRPC
+	grpcServer := grpc.NewServer()
+	proto.RegisterChatServiceServer(grpcServer, chatServer)
 
 	listener, err := net.Listen("tcp", ":"+*port)
 	log.Println("Chat Service listening on :" + *port)
@@ -318,5 +282,5 @@ func main() {
 		return
 	}
 
-	mGRPC.Serve(listener)
+	grpcServer.Serve(listener)
 }

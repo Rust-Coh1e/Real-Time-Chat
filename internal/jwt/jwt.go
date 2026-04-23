@@ -1,7 +1,8 @@
-package internal
+package jwt
 
 import (
 	"fmt"
+	"real-time-chat/internal/model"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -9,14 +10,8 @@ import (
 	"github.com/google/uuid"
 )
 
-type Claims struct {
-	UserID   string `json:"user_id"`
-	Username string `json:"username"`
-	jwt.RegisteredClaims
-}
-
 func GenerateToken(userID uuid.UUID, username string, secret string) (string, error) {
-	claims := Claims{
+	claims := model.Claims{
 		UserID:   userID.String(),
 		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -38,10 +33,10 @@ func GenerateToken(userID uuid.UUID, username string, secret string) (string, er
 	return tokenString, nil
 }
 
-func ParseToken(tokenString string, secret string) (*Claims, error) {
+func ParseToken(tokenString string, secret string) (*model.Claims, error) {
 	secretB := []byte(secret)
 
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &model.Claims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected sighing method")
 		}
@@ -53,7 +48,7 @@ func ParseToken(tokenString string, secret string) (*Claims, error) {
 		return nil, err
 	}
 
-	claims, ok := token.Claims.(*Claims)
+	claims, ok := token.Claims.(*model.Claims)
 	if !ok || !token.Valid {
 		return nil, fmt.Errorf("invalid token")
 	}

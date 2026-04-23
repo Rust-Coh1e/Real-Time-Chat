@@ -9,7 +9,9 @@ import (
 	"os"
 	"os/signal"
 	"real-time-chat/config"
-	"real-time-chat/internal"
+	"real-time-chat/internal/jwt"
+	"real-time-chat/internal/model"
+	"real-time-chat/internal/repository"
 	"real-time-chat/middleware"
 	"syscall"
 	"time"
@@ -18,16 +20,11 @@ import (
 )
 
 type AuthService struct {
-	db     *internal.Database
+	db     *repository.Postgres
 	secret string
 }
 
-type RegisterReq struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-func NewAuthService(db *internal.Database, cfg *config.Config) *AuthService {
+func NewAuthService(db *repository.Postgres, cfg *config.Config) *AuthService {
 	return &AuthService{
 		db:     db,
 		secret: cfg.Secret,
@@ -38,7 +35,7 @@ func (authS *AuthService) RegisterHandler(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "Application/json")
 
-	var req RegisterReq
+	var req model.RegisterReq
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -73,7 +70,7 @@ func (authS *AuthService) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "Application/json")
 
-	var req RegisterReq
+	var req model.RegisterReq
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
@@ -94,7 +91,7 @@ func (authS *AuthService) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, status := internal.GenerateToken(id, req.Username, authS.secret)
+	token, status := jwt.GenerateToken(id, req.Username, authS.secret)
 	if status != nil {
 		http.Error(w, "Error", http.StatusInternalServerError)
 		return
@@ -115,7 +112,7 @@ func main() {
 		panic(err)
 	}
 
-	db, err := internal.NewDatabase(cfg)
+	db, err := repository.NewPostgres(cfg)
 
 	if err != nil {
 		panic(err)
