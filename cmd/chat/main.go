@@ -11,6 +11,7 @@ import (
 	"real-time-chat/internal/repository"
 	"real-time-chat/internal/service"
 	"real-time-chat/proto"
+	"time"
 
 	"google.golang.org/grpc"
 )
@@ -123,7 +124,7 @@ func (s *ChatServer) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pro
 				FileUrl:   history[i].FileURL,
 				SenderId:  history[i].SenderID.String(),
 				MessageId: history[i].ID.String(),
-				Timestamp: history[i].CreatedAt.Unix(),
+				Timestamp: history[i].CreatedAt.UnixMilli(),
 				Room:      roomName,
 			})
 		}
@@ -245,6 +246,39 @@ func (s *ChatServer) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pro
 
 			hub := s.hubs.GetOrMake(msg.Room)
 			if err := s.rdb.Publish(ctx, msg.Room, data); err != nil {
+				hub.Broadcast <- data
+			}
+
+		case "history":
+			log.Println("History request:", msg.Room, "timestamp:", msg.Timestamp)
+			before := time.UnixMilli(msg.Timestamp)
+			log.Println("Before:", before)
+
+			history, err := s.chatService.GetHistoryBefore(ctx, msg.Room, before, 50)
+			if err != nil {
+				continue
+			}
+			log.Println("History result: count:", len(history), "err:", err)
+			for i := len(history) - 1; i >= 0; i-- {
+				stream.Send(&proto.ChatMessage{
+					Action:    "history",
+					Sender:    history[i].Sender,
+					Text:      history[i].Text,
+					FileUrl:   history[i].FileURL,
+					SenderId:  history[i].SenderID.String(),
+					MessageId: history[i].ID.String(),
+					Timestamp: history[i].CreatedAt.UnixMilli(),
+					Room:      msg.Room,
+				})
+			}
+		case "typing":
+			data, _ := json.Marshal(map[string]string{
+				"action": "typing",
+				"room":   msg.Room,
+				"sender": msg.Sender,
+			})
+			if err := s.rdb.Publish(ctx, msg.Room, data); err != nil {
+				hub := s.hubs.GetOrMake(msg.Room)
 				hub.Broadcast <- data
 			}
 		}

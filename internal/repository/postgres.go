@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"real-time-chat/config"
 	"real-time-chat/internal/model"
 	"time"
@@ -255,4 +256,32 @@ func (db *Postgres) GetUserRooms(ctx context.Context, userID uuid.UUID) ([]strin
 	}
 
 	return roomIDs, rows.Err()
+}
+
+func (db *Postgres) GetHistoryBefore(ctx context.Context, roomID uuid.UUID, before time.Time, limit int) ([]model.MessageRow, error) {
+	log.Println("SQL before UTC:", before.UTC())
+	beforeUTC := before.UTC()
+	rows, err := db.conn.QueryContext(ctx,
+		`SELECT m.id, u.username, m.text, m.file_url, m.created_at
+        FROM msg m JOIN users u ON m.sender_id = u.id
+        WHERE m.room_id = $1 AND m.created_at < $2
+        ORDER BY m.created_at ASC
+        LIMIT $3`,
+		roomID, beforeUTC, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var messages []model.MessageRow
+	for rows.Next() {
+		var m model.MessageRow
+		if err := rows.Scan(&m.ID, &m.Sender, &m.Text, &m.FileURL, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		messages = append(messages, m)
+	}
+	log.Println("Results:", len(messages), "first:", messages[0].CreatedAt, "last:", messages[len(messages)-1].CreatedAt)
+	return messages, rows.Err()
 }

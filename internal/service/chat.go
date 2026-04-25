@@ -64,7 +64,7 @@ func (chat *ChatService) SendMessage(ctx context.Context, room, senderID, sender
 		"file_url":   fileURL,
 		"message_id": newMsgID.String(),
 		"room":       room,
-		"timestamp":  time.Now().Unix(),
+		"timestamp":  msgRow.CreatedAt.UnixMilli(),
 	}
 
 	data, err := json.Marshal(msgData)
@@ -194,10 +194,28 @@ func (chat *ChatService) GetUserRooms(ctx context.Context, userID string) ([]str
 	return chat.db.GetUserRooms(ctx, id)
 }
 
+// func (chat *ChatService) GetHistory(ctx context.Context, room string, limit int) ([]model.MessageRow, error) {
+// 	roomID, err := chat.db.GetOrCreateRoom(ctx, room)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return chat.ms.GetHistory(ctx, roomID, limit)
+// }
+
 func (chat *ChatService) GetHistory(ctx context.Context, room string, limit int) ([]model.MessageRow, error) {
 	roomID, err := chat.db.GetOrCreateRoom(ctx, room)
 	if err != nil {
 		return nil, err
 	}
-	return chat.ms.GetHistory(ctx, roomID, limit)
+	return chat.db.GetHistory(ctx, roomID, limit)
+}
+
+func (chat *ChatService) GetHistoryBefore(ctx context.Context, room string, before time.Time, limit int) ([]model.MessageRow, error) {
+
+	roomID, err := chat.db.GetOrCreateRoom(ctx, room)
+	log.Println("GetHistoryBefore roomID:", roomID, "before:", before, "limit:", limit)
+	if err != nil {
+		return nil, err
+	}
+	return chat.ms.db.GetHistoryBefore(ctx, roomID, before, limit)
 }

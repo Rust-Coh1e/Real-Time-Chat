@@ -129,6 +129,7 @@ func wsHandler(gateway *Gateway, cfg *config.Config) http.HandlerFunc {
 				MessageID string `json:"message_id"`
 				Emoji     string `json:"emoji"`
 				Room      string `json:"room"`
+				Timestamp int64  `json:"timestamp"`
 			}
 
 			json.Unmarshal(msg, &wsMsg)
@@ -142,6 +143,7 @@ func wsHandler(gateway *Gateway, cfg *config.Config) http.HandlerFunc {
 				Action:    wsMsg.Action,
 				MessageId: wsMsg.MessageID,
 				Emoji:     wsMsg.Emoji,
+				Timestamp: wsMsg.Timestamp,
 			})
 		}
 	}
