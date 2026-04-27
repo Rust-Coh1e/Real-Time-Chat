@@ -39,47 +39,50 @@ func NewPostgres(cfg *config.Config) (*Postgres, error) {
 	return &Postgres{conn: db}, nil
 }
 
-func (db *Postgres) CreateUser(ctx context.Context, username, password string) (uuid.UUID, error) {
+func (db *Postgres) CreateUser(ctx context.Context, username, email, password string) (uuid.UUID, string, error) {
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, "", err
 	}
 
 	id := uuid.New()
-
+	// нужно как то сгенировать токен
+	token := uuid.New().String()
 	_, err = db.conn.ExecContext(ctx,
-		"INSERT INTO users (id, username, password_hash) VALUES ($1, $2, $3)",
-		id, username, string(hash),
+		"INSERT INTO users (id, username, email, verify_token, password_hash) VALUES ($1, $2, $3, $4, $5)",
+		id, username, email, token, string(hash),
 	)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, "", err
 	}
 
-	return id, nil
+	return id, token, nil
 }
 
-func (db *Postgres) GetUserByName(ctx context.Context, username string) (uuid.UUID, string, error) {
+func (db *Postgres) GetUserByName(ctx context.Context, username string) (uuid.UUID, string, bool, error) {
 
-	query := `SELECT id, password_hash FROM users WHERE username = $1`
+	query := `SELECT id, password_hash, verified FROM users WHERE username = $1`
 
 	var id uuid.UUID
 	var hash string
+	var verified bool
 
 	err := db.conn.QueryRowContext(ctx, query, username).Scan(
 		&id,
 		&hash,
+		&verified,
 	)
 
 	if err == sql.ErrNoRows {
-		return uuid.Nil, hash, nil
+		return uuid.Nil, hash, false, nil
 	}
 
 	if err != nil {
-		return uuid.Nil, hash, err
+		return uuid.Nil, hash, false, err
 	}
 
-	return id, hash, nil
+	return id, hash, verified, nil
 }
 
 func (db *Postgres) GetOrCreateRoom(ctx context.Context, name string) (uuid.UUID, error) {
@@ -284,4 +287,36 @@ func (db *Postgres) GetHistoryBefore(ctx context.Context, roomID uuid.UUID, befo
 	}
 	log.Println("Results:", len(messages), "first:", messages[0].CreatedAt, "last:", messages[len(messages)-1].CreatedAt)
 	return messages, rows.Err()
+}
+
+func (db *Postgres) VerifyToken(ctx context.Context, token string) error {
+	result, status := db.conn.ExecContext(ctx,
+		"UPDATE users SET verified = true WHERE verify_token = $1",
+		token,
+	)
+	if status != nil {
+		return status
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("Not found user")
+	}
+	return nil
+}
+
+func (db *Postgres) UpdateAvatar(ctx context.Context, userID, url string) error {
+	result, status := db.conn.ExecContext(ctx,
+		"UPDATE users SET avatar_url = $1 WHERE id = $2",
+		url, userID,
+	)
+	if status != nil {
+		return status
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("Not found user")
+	}
+	return nil
 }
