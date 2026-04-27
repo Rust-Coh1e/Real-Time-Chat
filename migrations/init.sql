@@ -1,8 +1,12 @@
 CREATE TABLE IF NOT EXISTS users (
-    id          UUID PRIMARY KEY,
-    username    TEXT NOT NULL UNIQUE,
-    password_hash      TEXT NOT NULL,
-    created_at  TIMESTAMP DEFAULT NOW()
+    id              UUID PRIMARY KEY,
+    username        TEXT NOT NULL UNIQUE,
+    email           TEXT NOT NULL UNIQUE,
+    password_hash   TEXT NOT NULL,
+    verified        BOOLEAN DEFAULT false,
+    verify_token    TEXT,
+    avatar_url      TEXT DEFAULT '',
+    created_at      TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS rooms (
