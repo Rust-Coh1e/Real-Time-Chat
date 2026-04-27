@@ -19,6 +19,10 @@ type Config struct {
 	MinioUsername string
 	MinioPassword string
 	MinioBucket   string
+	MailerHost    string
+	MailerPort    string
+	MailerFrom    string
+	IP            string
 }
 
 func Load() (*Config, error) {
@@ -41,5 +45,9 @@ func Load() (*Config, error) {
 		MinioUsername: os.Getenv("MINIO_USERNAME"),
 		MinioPassword: os.Getenv("MINIO_PASSWORD"),
 		MinioBucket:   os.Getenv("MINIO_BUCKET"),
+		MailerHost:    os.Getenv("MAILER_HOST"),
+		MailerPort:    os.Getenv("MAILER_PORT"),
+		MailerFrom:    os.Getenv("MAILER_FROM"),
+		IP:            os.Getenv("IP"),
 	}, nil
 }
