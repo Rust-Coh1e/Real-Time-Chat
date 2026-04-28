@@ -232,6 +232,35 @@ func (s *ChatServer) Chat(stream grpc.BidiStreamingServer[proto.ChatMessage, pro
 					stream.Send(&chatMsg)
 				}
 			}()
+		case "direct":
+			roomName, err := s.chatService.DirectMessage(ctx, msg.Sender, msg.Room)
+			if err != nil {
+				log.Println("direct error:", err)
+				continue
+			}
+
+			if _, ok := clients[roomName]; ok {
+				continue // уже подписан
+			}
+
+			currHub := s.hubs.GetOrMake(roomName)
+			client := hub.NewClient(currHub, msg.Sender)
+			currHub.Register <- client
+			clients[roomName] = client
+
+			go func() {
+				for m := range client.Chan {
+					var chatMsg proto.ChatMessage
+					json.Unmarshal(m, &chatMsg)
+					stream.Send(&chatMsg)
+				}
+			}()
+
+			stream.Send(&proto.ChatMessage{
+				Action: "joined",
+				Room:   roomName,
+				Sender: msg.Sender,
+			})
 
 		case "leave":
 			if _, ok := clients[msg.Room]; !ok {

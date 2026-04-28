@@ -320,3 +320,50 @@ func (db *Postgres) UpdateAvatar(ctx context.Context, userID, url string) error 
 	}
 	return nil
 }
+
+func (db *Postgres) GetOrCreateDirectRoom(ctx context.Context, username, inviteUsername string) (uuid.UUID, error) {
+	query := `SELECT EXISTS (SELECT 1 FROM users WHERE username = $1)`
+
+	var exist bool
+
+	err := db.conn.QueryRowContext(ctx, query, inviteUsername).Scan(
+		&exist,
+	)
+
+	if exist == false {
+		return uuid.Nil, fmt.Errorf("Not found")
+	}
+
+	roomName := "dm:" + inviteUsername + ":" + username
+
+	if username < inviteUsername {
+		roomName = "dm:" + username + ":" + inviteUsername
+	}
+
+	query = `SELECT id FROM rooms WHERE name = $1`
+
+	var id uuid.UUID
+
+	err = db.conn.QueryRowContext(ctx, query, roomName).Scan(
+		&id,
+	)
+
+	if err == sql.ErrNoRows {
+
+		id = uuid.New()
+		query = "INSERT INTO rooms (id, name, direct) VALUES ($1, $2, true)"
+
+		_, err = db.conn.ExecContext(ctx, query, id, roomName)
+
+		senderUUID, _, _, _ := db.GetUserByName(ctx, username)
+		inviterUUID, _, _, _ := db.GetUserByName(ctx, inviteUsername)
+		db.JoinRoom(ctx, id, senderUUID)
+		db.JoinRoom(ctx, id, inviterUUID)
+	}
+
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	return id, nil
+}

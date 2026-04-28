@@ -219,3 +219,12 @@ func (chat *ChatService) GetHistoryBefore(ctx context.Context, room string, befo
 	}
 	return chat.ms.db.GetHistoryBefore(ctx, roomID, before, limit)
 }
+
+func (chat *ChatService) DirectMessage(ctx context.Context, username, invited string) (string, error) {
+	roomName := "dm:" + invited + ":" + username
+	if username < invited {
+		roomName = "dm:" + username + ":" + invited
+	}
+	_, err := chat.db.GetOrCreateDirectRoom(ctx, username, invited)
+	return roomName, err
+}

@@ -35,8 +35,8 @@ var upgrader = websocket.Upgrader{
 
 func wsHandler(gateway *Gateway, cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
-		clientToken := r.Header.Get("Authorization")
+		log.Println("WS request received")
+		clientToken := r.URL.Query().Get("token")
 		// clientRoom := r.URL.Query().Get("room")
 		clientClaims, err := jwt.ParseToken(clientToken, cfg.Secret)
 
