@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS rooms (
     id          UUID PRIMARY KEY,
     name    TEXT NOT NULL UNIQUE,
+    direct BOOLEAN DEFAULT false,
     created_at  TIMESTAMP DEFAULT NOW()
 );
 
@@ -25,7 +26,7 @@ CREATE TABLE IF NOT EXISTS msg (
 
 
 
-    FOREIGN KEY (room_id) REFERENCES Rooms(id),
+    FOREIGN KEY (room_id) REFERENCES Rooms(id), 
     FOREIGN KEY (sender_id) REFERENCES Users(id)
 
 );
@@ -49,3 +50,4 @@ CREATE TABLE IF NOT EXISTS room_members (
     joined_at TIMESTAMP DEFAULT NOW(),
     PRIMARY KEY (room_id, user_id)
 );
+
